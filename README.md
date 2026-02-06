@@ -1,5 +1,4 @@
 
-https://storage.googleapis.com/legacy-ai-agent-images/Gemini_Generated_Image_7ez0d47ez0d47ez0.png
 
 
 # Floyd
