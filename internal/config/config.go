@@ -15,13 +15,13 @@ import (
 	"time"
 
 	"charm.land/catwalk/pkg/catwalk"
+	"github.com/invopop/jsonschema"
 	hyperp "github.com/legacy-ai/floyd/internal/agent/hyper"
 	"github.com/legacy-ai/floyd/internal/csync"
 	"github.com/legacy-ai/floyd/internal/env"
 	"github.com/legacy-ai/floyd/internal/oauth"
 	"github.com/legacy-ai/floyd/internal/oauth/copilot"
 	"github.com/legacy-ai/floyd/internal/oauth/hyper"
-	"github.com/invopop/jsonschema"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
@@ -260,9 +260,25 @@ type Options struct {
 	DisableDefaultProviders   bool         `json:"disable_default_providers,omitempty" jsonschema:"description=Ignore all default/embedded providers. When enabled, providers must be fully specified in the config file with base_url, models, and api_key - no merging with defaults occurs,default=false"`
 	Attribution               *Attribution `json:"attribution,omitempty" jsonschema:"description=Attribution settings for generated content"`
 	DisableMetrics            bool         `json:"disable_metrics,omitempty" jsonschema:"description=Disable sending metrics,default=false"`
+	FileOps                   *FileOps     `json:"file_ops,omitempty" jsonschema:"description=File operation settings"`
+	Execution                 *Execution   `json:"execution,omitempty" jsonschema:"description=Execution settings for shell commands"`
 	InitializeAs              string       `json:"initialize_as,omitempty" jsonschema:"description=Name of the context file to create/update during project initialization,default=AGENTS.md,example=AGENTS.md,example=CRUSH.md,example=CLAUDE.md,example=docs/LLMs.md"`
 	AutoLSP                   *bool        `json:"auto_lsp,omitempty" jsonschema:"description=Automatically setup LSPs based on root markers,default=true"`
 	Progress                  *bool        `json:"progress,omitempty" jsonschema:"description=Show indeterminate progress updates during long operations,default=true"`
+}
+
+type FileOps struct {
+	MaxReadSizeBytes int64 `json:"max_read_size_bytes,omitempty" jsonschema:"description=Maximum file size in bytes to read,default=10485760,example=10485760"`
+}
+
+type Execution struct {
+	Shell           string   `json:"shell,omitempty" jsonschema:"description=Shell to use for command execution,example=/bin/bash"`
+	TimeoutSeconds  int      `json:"timeout_seconds,omitempty" jsonschema:"description=Default timeout in seconds for command execution,default=30,example=30"`
+	MaxBufferBytes  int      `json:"max_buffer_bytes,omitempty" jsonschema:"description=Maximum output size in bytes to capture,default=5242880,example=5242880"`
+	AllowedPrefixes []string `json:"allowed_prefixes,omitempty" jsonschema:"description=Allowed command prefixes (optional allowlist)"`
+	AllowedPatterns []string `json:"allowed_patterns,omitempty" jsonschema:"description=Allowed command regex patterns (optional allowlist)"`
+	DeniedPrefixes  []string `json:"denied_prefixes,omitempty" jsonschema:"description=Denied command prefixes (optional denylist)"`
+	DeniedPatterns  []string `json:"denied_patterns,omitempty" jsonschema:"description=Denied command regex patterns (optional denylist)"`
 }
 
 type MCPs map[string]MCPConfig

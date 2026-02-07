@@ -342,6 +342,24 @@ func (c *Config) setDefaults(workingDir, dataDir string) {
 	if c.Options.TUI == nil {
 		c.Options.TUI = &TUIOptions{}
 	}
+	if c.Options.FileOps == nil {
+		c.Options.FileOps = &FileOps{MaxReadSizeBytes: 10 * 1024 * 1024}
+	} else if c.Options.FileOps.MaxReadSizeBytes == 0 {
+		c.Options.FileOps.MaxReadSizeBytes = 10 * 1024 * 1024
+	}
+	if c.Options.Execution == nil {
+		c.Options.Execution = &Execution{
+			TimeoutSeconds: 30,
+			MaxBufferBytes: 5 * 1024 * 1024,
+		}
+	} else {
+		if c.Options.Execution.TimeoutSeconds == 0 {
+			c.Options.Execution.TimeoutSeconds = 30
+		}
+		if c.Options.Execution.MaxBufferBytes == 0 {
+			c.Options.Execution.MaxBufferBytes = 5 * 1024 * 1024
+		}
+	}
 	if c.Options.ContextPaths == nil {
 		c.Options.ContextPaths = []string{}
 	}

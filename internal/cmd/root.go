@@ -15,19 +15,20 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
-	"github.com/legacy-ai/floyd/internal/app"
-	"github.com/legacy-ai/floyd/internal/config"
-	"github.com/legacy-ai/floyd/internal/db"
-	"github.com/legacy-ai/floyd/internal/event"
-	"github.com/legacy-ai/floyd/internal/projects"
-	"github.com/legacy-ai/floyd/internal/ui/common"
-	ui "github.com/legacy-ai/floyd/internal/ui/model"
-	"github.com/legacy-ai/floyd/internal/version"
 	"github.com/charmbracelet/fang"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/charmtone"
 	"github.com/charmbracelet/x/term"
+	"github.com/legacy-ai/floyd/internal/app"
+	"github.com/legacy-ai/floyd/internal/config"
+	"github.com/legacy-ai/floyd/internal/db"
+	"github.com/legacy-ai/floyd/internal/event"
+	"github.com/legacy-ai/floyd/internal/projects"
+	"github.com/legacy-ai/floyd/internal/telemetry"
+	"github.com/legacy-ai/floyd/internal/ui/common"
+	ui "github.com/legacy-ai/floyd/internal/ui/model"
+	"github.com/legacy-ai/floyd/internal/version"
 	"github.com/spf13/cobra"
 )
 
@@ -106,6 +107,21 @@ floyd -y
 		}
 		return nil
 	},
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		if shouldSkipInit(cmd) {
+			return nil
+		}
+		if err := initTelemetryForCmd(cmd); err != nil {
+			slog.Debug("Telemetry init failed", "error", err)
+		}
+		return nil
+	},
+	PersistentPostRun: func(cmd *cobra.Command, args []string) {
+		telemetry.Default().Track(telemetry.EventCommandSuccess, map[string]any{
+			"command": cmd.CommandPath(),
+		})
+		telemetry.Default().FlushSync()
+	},
 	PostRun: func(cmd *cobra.Command, args []string) {
 		event.AppExited()
 	},
@@ -128,6 +144,12 @@ const defaultVersionTemplate = `{{with .DisplayName}}{{printf "%s " .}}{{end}}{{
 `
 
 func Execute() {
+	for _, arg := range os.Args[1:] {
+		if arg == "--version" || arg == "-v" {
+			fmt.Printf("floyd version %s\n", version.Version)
+			return
+		}
+	}
 	// NOTE: very hacky: we create a colorprofile writer with STDOUT, then make
 	// it forward to a bytes.Buffer, write the colored heartbit to it, and then
 	// finally prepend it in the version template.
@@ -198,6 +220,11 @@ func setupApp(cmd *cobra.Command) (*app.App, error) {
 		return nil, err
 	}
 
+	telemetry.InitDefault(shouldEnableMetrics(), telemetry.DefaultAdditionalData())
+	telemetry.Default().Track(telemetry.EventCLIStart, map[string]any{
+		"mode": "tui",
+	})
+
 	if cfg.Permissions == nil {
 		cfg.Permissions = &config.Permissions{}
 	}
@@ -230,6 +257,40 @@ func setupApp(cmd *cobra.Command) (*app.App, error) {
 	}
 
 	return appInstance, nil
+}
+
+func initTelemetryForCmd(cmd *cobra.Command) error {
+	debug, _ := cmd.Flags().GetBool("debug")
+	dataDir, _ := cmd.Flags().GetString("data-dir")
+	cwd, err := ResolveCwd(cmd)
+	if err != nil {
+		return err
+	}
+	if _, err := config.Init(cwd, dataDir, debug); err != nil {
+		return err
+	}
+	telemetry.InitDefault(shouldEnableMetrics(), telemetry.DefaultAdditionalData())
+	telemetry.Default().Track(telemetry.EventCommandRun, map[string]any{
+		"command": cmd.CommandPath(),
+	})
+	return nil
+}
+
+func shouldSkipInit(cmd *cobra.Command) bool {
+	for _, arg := range os.Args {
+		if arg == "--help" || arg == "-h" || arg == "--version" || arg == "-v" || arg == "help" || arg == "version" {
+			return true
+		}
+	}
+	if cmd != nil {
+		if flag := cmd.Flag("help"); flag != nil && flag.Changed {
+			return true
+		}
+		if flag := cmd.Flag("version"); flag != nil && flag.Changed {
+			return true
+		}
+	}
+	return false
 }
 
 func shouldEnableMetrics() bool {

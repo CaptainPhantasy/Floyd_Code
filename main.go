@@ -6,11 +6,20 @@ import (
 	_ "net/http/pprof"
 	"os"
 
+	"github.com/joho/godotenv"
 	"github.com/legacy-ai/floyd/internal/cmd"
-	_ "github.com/joho/godotenv/autoload"
 )
 
 func main() {
+	for _, arg := range os.Args[1:] {
+		if arg == "--version" || arg == "-v" {
+			cmd.Execute()
+			return
+		}
+	}
+
+	_ = godotenv.Load()
+
 	if os.Getenv("FLOYD_PROFILE") != "" {
 		go func() {
 			slog.Info("Serving pprof at localhost:6060")

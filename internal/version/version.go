@@ -4,7 +4,7 @@ import "runtime/debug"
 
 // Build-time parameters set via -ldflags
 
-var Version = "devel"
+var Version = "beta"
 
 // A user may install floyd using `go install github.com/legacy-ai/floyd@latest`.
 // without -ldflags, in which case the version above is unset. As a workaround
