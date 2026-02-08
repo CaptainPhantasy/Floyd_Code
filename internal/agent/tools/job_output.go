@@ -11,7 +11,8 @@ import (
 )
 
 const (
-	JobOutputToolName = "job_output"
+	JobOutputToolName    = "job_output"
+	maxJobOutputLength   = 2000 // Maximum job output length before truncation
 )
 
 //go:embed job_output.md
@@ -77,6 +78,11 @@ func NewJobOutputTool() fantasy.AgentTool {
 
 			if output == "" {
 				output = BashNoOutput
+			}
+
+			// Truncate output if too long to prevent context flooding
+			if len(output) > maxJobOutputLength {
+				output = output[:maxJobOutputLength] + "\n... [Output truncated to save context. Refine your search pattern.]"
 			}
 
 			result := fmt.Sprintf("Status: %s\n\n%s", status, output)
