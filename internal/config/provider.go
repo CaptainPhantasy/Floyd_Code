@@ -182,9 +182,62 @@ func Providers(cfg *Config) ([]catwalk.Provider, error) {
 		wg.Wait()
 
 		providerList = slices.Collect(providers.Seq())
+		// Priority: 1) Custom endpoints (user-defined base_url) > 2) Hyper > 3) Copilot > 4) OpenAI > others
+		slices.SortStableFunc(providerList, func(a, b catwalk.Provider) int {
+			aID, bID := string(a.ID), string(b.ID)
+			// Check if provider has a custom APIEndpoint (user-configured, not default)
+			aCustom := isCustomEndpoint(a)
+			bCustom := isCustomEndpoint(b)
+
+			switch {
+			// Priority 1: User-defined custom endpoints (like Z.ai Coding)
+			case aCustom && !bCustom:
+				return -1
+			case bCustom && !aCustom:
+				return 1
+			// Priority 2: Hyper (if configured and no custom on either side)
+			case !aCustom && !bCustom && aID == "hyper" && bID != "hyper":
+				return -1
+			case !aCustom && !bCustom && bID == "hyper" && aID != "hyper":
+				return 1
+			// Priority 3: Copilot
+			case !aCustom && !bCustom && aID == "copilot" && bID != "copilot" && bID != "hyper":
+				return -1
+			case !aCustom && !bCustom && bID == "copilot" && aID != "copilot" && aID != "hyper":
+				return 1
+			// Priority 4: OpenAI
+			case !aCustom && !bCustom && aID == "openai" && bID != "openai" && bID != "hyper" && bID != "copilot":
+				return -1
+			case !aCustom && !bCustom && bID == "openai" && aID != "openai" && aID != "hyper" && aID != "copilot":
+				return 1
+			default:
+				return 0
+			}
+		})
 		providerErr = errors.Join(errs...)
 	})
 	return providerList, providerErr
+}
+
+// isCustomEndpoint returns true if the provider has a user-configured custom endpoint.
+// Known provider defaults are excluded from custom detection.
+func isCustomEndpoint(p catwalk.Provider) bool {
+	if p.APIEndpoint == "" {
+		return false
+	}
+	// Known default endpoints (these are NOT custom)
+	defaultEndpoints := map[string]string{
+		"openai":    "https://api.openai.com/v1",
+		"anthropic": "https://api.anthropic.com/v1",
+		"hyper":     "",
+		"copilot":   "",
+	}
+	// Check if this is a known provider with default endpoint
+	if defaultURL, ok := defaultEndpoints[string(p.ID)]; ok {
+		return p.APIEndpoint != defaultURL
+	}
+	// Unknown providers with custom endpoints are considered custom
+	return true
 }
 
 type cache[T any] struct {

@@ -121,7 +121,7 @@ func (c *Client) CompleteMessages(messages []Message, options CompletionOptions)
 		return nil, err
 	}
 
-	responseBody, err := c.sendRequest("/v1/messages", payload)
+	responseBody, err := c.sendRequest(buildURL(c.config.APIBaseURL, "/v1/messages"), payload)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +163,7 @@ func (c *Client) CompleteStream(messages []Message, options CompletionOptions, o
 		return err
 	}
 
-	url := c.config.APIBaseURL + "/v1/messages"
+	url := buildURL(c.config.APIBaseURL, "/v1/messages")
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(payload))
 	if err != nil {
 		return err
@@ -215,7 +215,14 @@ func (c *Client) Disconnect() error {
 }
 
 func (c *Client) sendRequest(path string, payload []byte) ([]byte, error) {
-	url := c.config.APIBaseURL + path
+	// If path is already a full URL (starts with http:// or https://), use it directly
+	// Otherwise, prepend the base URL
+	var url string
+	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
+		url = path
+	} else {
+		url = c.config.APIBaseURL + path
+	}
 	attempts := c.config.Retry.MaxRetries + 1
 	if attempts < 1 {
 		attempts = 1
@@ -314,6 +321,33 @@ func (c *Client) defaultModel(model string) string {
 		return model
 	}
 	return c.config.DefaultModel
+}
+
+// buildURL constructs a full URL from base and path, avoiding duplicate version segments.
+// If baseURL already ends with /v1, /v4, etc., and path starts with /v1, it avoids duplication.
+func buildURL(baseURL, path string) string {
+	// Remove trailing slash from base
+	baseURL = strings.TrimSuffix(baseURL, "/")
+	// Remove leading slash from path
+	path = strings.TrimPrefix(path, "/")
+
+	// Check if base already contains a version path (like /v1, /v4, /paas/v4)
+	hasVersionInPath := false
+	versionPatterns := []string{"/v1/", "/v4/", "/v1/", "/paas/v", "/api/v"}
+	for _, pattern := range versionPatterns {
+		if strings.Contains(baseURL, pattern) || strings.HasSuffix(baseURL, strings.TrimSuffix(pattern, "/")) {
+			hasVersionInPath = true
+			break
+		}
+	}
+
+	// If base has version path and path starts with v1/messages or v1/chat, use path as-is
+	if hasVersionInPath && (strings.HasPrefix(path, "v1/") || strings.HasPrefix(path, "chat/")) {
+		return baseURL + "/" + path
+	}
+
+	// Default: append path directly
+	return baseURL + "/" + path
 }
 
 func intPtr(value int) *int {

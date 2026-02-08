@@ -1,0 +1,95 @@
+{
+  "$schema": "https://charm.land/floyd.json",
+  "rules": [
+    "API_BEHAVIOR: The backend is a pure Coding Model. Output code blocks immediately.",
+    "NO_CHAT: Do not provide conversational filler like 'Here is the code'.",
+    "DATABASE: This project uses sqlc. NEVER edit internal/db/*.sql.go manually. Only edit internal/db/sql/*.sql and run 'sqlc generate'.",
+    "FRONTEND: UI logic lives in internal/ui/ (Bubble Tea/Go) AND .floyd/src/ (TypeScript). Verify which layer the user targets.",
+    "TESTING: Run tests using 'go test ./...' in the root. Do not use ginkgo or other frameworks unless present.",
+    "STYLE: Use 'go fmt' standards. No dot imports. Prefer table-driven tests.",
+    "ARCHITECTURE: This is a Go CLI tool using Bubble Tea for TUI. MCP servers provide capabilities (web search, code analysis, etc.)."
+  ],
+  "providers": {
+    "z-ai": {
+      "id": "z-ai",
+      "name": "Z.AI Coding",
+      "type": "anthropic",
+      "base_url": "https://api.z.ai/api/anthropic",
+      "api_key": "$ANTHROPIC_AUTH_TOKEN",
+      "system_prompt_prefix": "You are a pure coding assistant. OUTPUT CODE ONLY. No explanations, no conversational filler, no 'Here is the code'. When asked for code, respond with a single code block containing only the solution.",
+      "models": [
+        {
+          "id": "claude-sonnet-4-20250514",
+          "name": "Claude Sonnet 4"
+        }
+      ]
+    }
+  },
+  "mcp": {
+    "zai-mcp-server": {
+      "type": "http",
+      "url": "https://api.z.ai/api/mcp/zai_mcp_server/mcp",
+      "headers": {
+        "Authorization": "Bearer 94667dec93a143dba1fb01d397412752.6qLk80XghszPmpsw"
+      }
+    },
+    "web-search-prime": {
+      "type": "http",
+      "url": "https://api.z.ai/api/mcp/web_search_prime/mcp",
+      "headers": {
+        "Authorization": "Bearer 94667dec93a143dba1fb01d397412752.6qLk80XghszPmpsw"
+      }
+    },
+    "web-reader": {
+      "type": "http",
+      "url": "https://api.z.ai/api/mcp/web_reader/mcp",
+      "headers": {
+        "Authorization": "Bearer 94667dec93a143dba1fb01d397412752.6qLk80XghszPmpsw"
+      }
+    },
+    "zread": {
+      "type": "http",
+      "url": "https://api.z.ai/api/mcp/zread/mcp",
+      "headers": {
+        "Authorization": "Bearer 94667dec93a143dba1fb01d397412752.6qLk80XghszPmpsw"
+      }
+    }
+  },
+  "lsp": {
+    "gopls": {
+      "options": {
+        "gofumpt": true,
+        "codelenses": {
+          "gc_details": true,
+          "generate": true,
+          "run_govulncheck": true,
+          "test": true,
+          "tidy": true,
+          "upgrade_dependency": true
+        },
+        "hints": {
+          "assignVariableTypes": true,
+          "compositeLiteralFields": true,
+          "compositeLiteralTypes": true,
+          "constantValues": true,
+          "functionTypeParameters": true,
+          "parameterNames": true,
+          "rangeVariableTypes": true
+        },
+        "analyses": {
+          "nilness": true,
+          "unusedparams": true,
+          "unusedvariable": true,
+          "unusedwrite": true,
+          "useany": true
+        },
+        "staticcheck": true,
+        "directoryFilters": [
+          "-.git",
+          "-node_modules"
+        ],
+        "semanticTokens": true
+      }
+    }
+  }
+}

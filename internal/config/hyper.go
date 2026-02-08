@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -69,6 +70,17 @@ func (s *hyperSync) Get(ctx context.Context) (catwalk.Provider, error) {
 			s.result = cached
 			return
 		}
+		// Auth failures: immediate silent fallback to cached/embedded, no error
+		if err != nil && strings.Contains(err.Error(), "auth failed") {
+			slog.Info("Hyper auth failed, using cached/embedded provider")
+			s.result = cached
+			return
+		}
+		if err != nil {
+			slog.Warn("Hyper provider fetch failed, using cached", "error", err)
+			s.result = cached
+			return
+		}
 		if len(result.Models) == 0 {
 			slog.Warn("Hyper did not return any models")
 			s.result = cached
@@ -113,6 +125,10 @@ func (r realHyperClient) Get(ctx context.Context, etag string) (catwalk.Provider
 	}
 
 	if resp.StatusCode != http.StatusOK {
+		// Auth/credential failures should fall back immediately without retry
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+			return result, fmt.Errorf("hyper auth failed: %d", resp.StatusCode)
+		}
 		return result, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
