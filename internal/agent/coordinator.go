@@ -799,7 +799,7 @@ func (c *coordinator) buildProvider(providerCfg config.ProviderConfig, model con
 	case "google-vertex":
 		return c.buildGoogleVertexProvider(headers, providerCfg.ExtraParams)
 	case openaicompat.Name:
-		if providerCfg.ID == string(catwalk.InferenceProviderZAI) && strings.Contains(model.Model, "glm-4.6") {
+		if providerCfg.ID == string(catwalk.InferenceProviderZAI) && (strings.Contains(model.Model, "glm-4.6") || strings.Contains(model.Model, "glm-5")) {
 			if providerCfg.ExtraBody == nil {
 				providerCfg.ExtraBody = map[string]any{}
 			}

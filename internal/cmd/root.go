@@ -37,7 +37,7 @@ func init() {
 	rootCmd.PersistentFlags().StringP("data-dir", "D", "", "Custom floyd data directory")
 	rootCmd.PersistentFlags().BoolP("debug", "d", false, "Debug")
 	rootCmd.Flags().BoolP("help", "h", false, "Help")
-	rootCmd.Flags().BoolP("yolo", "y", false, "Automatically accept all permissions (dangerous mode)")
+	rootCmd.PersistentFlags().BoolP("yolo", "y", false, "Automatically accept all permissions (dangerous mode)")
 
 	rootCmd.AddCommand(
 		runCmd,

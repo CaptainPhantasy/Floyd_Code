@@ -133,10 +133,18 @@ func Close() error {
 	return nil
 }
 
+// maxConcurrentStdio limits how many stdio MCP servers can spawn simultaneously.
+// Each stdio MCP starts a child process (typically Node.js) which can consume
+// significant memory. Spawning too many at once can trigger macOS jetsam (SIGKILL)
+// on systems with low free pages.
+const maxConcurrentStdio = 2
+
 // Initialize initializes MCP clients based on the provided configuration.
 func Initialize(ctx context.Context, permissions permission.Service, cfg *config.Config) {
 	slog.Info("Initializing MCP clients")
 	var wg sync.WaitGroup
+	stdioSem := make(chan struct{}, maxConcurrentStdio)
+
 	// Initialize states for all configured MCPs
 	for name, m := range cfg.MCP {
 		if m.Disabled {
@@ -166,6 +174,12 @@ func Initialize(ctx context.Context, permissions permission.Service, cfg *config
 					slog.Error("Panic in MCP client initialization", "error", err, "name", name)
 				}
 			}()
+
+			// Limit concurrent stdio process spawns to avoid memory spikes.
+			if m.Type == config.MCPStdio {
+				stdioSem <- struct{}{}
+				defer func() { <-stdioSem }()
+			}
 
 			// createSession handles its own timeout internally.
 			session, err := createSession(ctx, name, m, cfg.Resolver())
