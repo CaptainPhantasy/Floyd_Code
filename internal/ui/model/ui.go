@@ -731,8 +731,8 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				return m, tea.Batch(cmds...)
 			}
-			// Ctrl+T exits terminal focus, Ctrl+C quits the app.
-			if key.Matches(msg, m.keyMap.Terminal) {
+			// Esc or Ctrl+T exits terminal focus.
+			if msg.Code == tea.KeyEscape || key.Matches(msg, m.keyMap.Terminal) {
 				m.term.Blur()
 				m.focus = uiFocusEditor
 				cmds = append(cmds, m.textarea.Focus())
