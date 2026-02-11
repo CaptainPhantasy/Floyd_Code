@@ -33,24 +33,10 @@ const (
 )
 
 var defaultContextPaths = []string{
-	".github/copilot-instructions.md",
-	".cursorrules",
-	".cursor/rules/",
-	"CLAUDE.md",
-	"CLAUDE.local.md",
-	"GEMINI.md",
-	"gemini.md",
 	"FLOYD.md",
 	"FLOYD.local.md",
-	"floyd.md",
-	"floyd.local.md",
-	"Floyd.md",
-	"Floyd.local.md",
-	"CRUSH.md",
-	"CRUSH.local.md",
 	"AGENTS.md",
-	"agents.md",
-	"Agents.md",
+	"CLAUDE.md",
 }
 
 type SelectedModelType string

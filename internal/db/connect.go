@@ -54,6 +54,8 @@ func Connect(ctx context.Context, dataDir string) (*sql.DB, error) {
 // databases created before the column was part of the initial
 // migration. SQLite does not support IF NOT EXISTS for ALTER TABLE
 // ADD COLUMN, so we check pragma_table_info first.
+//
+// This also handles schema migrations from old versions (e.g., name -> title).
 func ensureColumns(ctx context.Context, db *sql.DB) error {
 	type col struct {
 		Table  string
@@ -62,7 +64,14 @@ func ensureColumns(ctx context.Context, db *sql.DB) error {
 	}
 
 	backfills := []col{
+		{"sessions", "title", "ALTER TABLE sessions ADD COLUMN title TEXT"},
 		{"sessions", "parent_session_id", "ALTER TABLE sessions ADD COLUMN parent_session_id TEXT"},
+		{"sessions", "message_count", "ALTER TABLE sessions ADD COLUMN message_count INTEGER NOT NULL DEFAULT 0"},
+		{"sessions", "prompt_tokens", "ALTER TABLE sessions ADD COLUMN prompt_tokens INTEGER NOT NULL DEFAULT 0"},
+		{"sessions", "completion_tokens", "ALTER TABLE sessions ADD COLUMN completion_tokens INTEGER NOT NULL DEFAULT 0"},
+		{"sessions", "cost", "ALTER TABLE sessions ADD COLUMN cost REAL NOT NULL DEFAULT 0.0"},
+		{"sessions", "summary_message_id", "ALTER TABLE sessions ADD COLUMN summary_message_id TEXT"},
+		{"sessions", "todos", "ALTER TABLE sessions ADD COLUMN todos TEXT"},
 	}
 
 	for _, c := range backfills {
@@ -92,5 +101,27 @@ func ensureColumns(ctx context.Context, db *sql.DB) error {
 			slog.Info("Added missing column", "table", c.Table, "column", c.Column)
 		}
 	}
+
+	// Handle name -> title migration for old databases
+	// Check if sessions has 'name' column and 'title' is empty
+	var hasName int
+	err := db.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = 'name'").Scan(&hasName)
+	if err != nil {
+		return fmt.Errorf("checking for name column: %w", err)
+	}
+	if hasName > 0 {
+		// Migrate name to title where title is NULL
+		result, err := db.ExecContext(ctx,
+			"UPDATE sessions SET title = name WHERE title IS NULL OR title = ''")
+		if err != nil {
+			return fmt.Errorf("migrating name to title: %w", err)
+		}
+		rows, _ := result.RowsAffected()
+		if rows > 0 {
+			slog.Info("Migrated sessions from name to title", "count", rows)
+		}
+	}
+
 	return nil
 }

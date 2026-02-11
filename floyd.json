@@ -23,6 +23,33 @@
           "name": "Claude Sonnet 4"
         }
       ]
+    },
+    "glm": {
+      "id": "zai",
+      "name": "GLM-4.7",
+      "type": "openai-compat",
+      "base_url": "https://api.z.ai/api/coding/paas/v4",
+      "api_key": "d793c9fc6ac24186ab97bcdedc3c81ed.fJMCpIe1NnypuKKD",
+      "system_prompt_prefix": "You are a precise coding assistant. Think before acting. Use view to read files before editing. Use multiedit to batch changes in one file. Always run tests to verify your work. Output code only — no conversational filler.",
+      "extra_body": {
+        "thinking": {
+          "type": "enabled",
+          "clear_thinking": true
+        }
+      },
+      "models": [
+        {
+          "id": "glm-4.7",
+          "name": "GLM-4.7",
+          "context_window": 131072,
+          "default_max_tokens": 16384,
+          "can_reason": true,
+          "options": {
+            "temperature": 0.2,
+            "top_p": 0.7
+          }
+        }
+      ]
     }
   },
   "mcp": {

@@ -77,3 +77,31 @@ func TestYourFunction(t *testing.T) {
 
 Use semantic commits: `fix:`, `feat:`, `chore:`, `refactor:`, `docs:`, `sec:`
 Keep commits to one line where possible.
+
+## Database Schema Validation Before Refactor Completion
+
+**CRITICAL**: Any refactor task that touches database-related code must include a final verification step that the database schema is in working order before being marked ready for audit.
+
+### Required Checklist for Refactors Affecting Database Code
+
+- [ ] **Schema sync**: Verify `internal/db/models.go` struct fields match the actual database schema
+- [ ] **Migration completeness**: Ensure all new columns have corresponding migrations in `internal/db/migrations/`
+- [ ] **Backfill handling**: Add missing columns to `ensureColumns()` in `internal/db/connect.go` with proper DDL
+- [ ] **Test with real database**: Run Floyd binary against an actual `~/.floyd/floyd.db` to confirm no schema errors
+- [ ] **Edge cases**: Test both fresh database creation and existing database migration paths
+
+### Common Schema Mismatch Symptoms
+
+```
+SQL logic error: table X has no column named Y
+```
+
+If you see this error during testing, the `ensureColumns()` function needs updating.
+
+### Quick Verification Command
+
+```bash
+# Verify the binary works against your local Floyd database
+floyd --help
+# If this fails with a schema error, the refactor is NOT complete
+```
