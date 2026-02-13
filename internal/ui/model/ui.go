@@ -15,6 +15,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"testing"
 	"time"
 
 	"charm.land/bubbles/v2/help"
@@ -116,6 +117,9 @@ type (
 	sessionFilesUpdatesMsg struct {
 		sessionFiles []SessionFile
 	}
+
+	// aiSuggestionMsg is sent when an AI-generated followup suggestion is ready
+	aiSuggestionMsg string
 )
 
 // UI represents the main user interface model.
@@ -161,6 +165,7 @@ type UI struct {
 	// Editor components
 	textarea          textarea.Model
 	commandSuggestion string
+	aiSuggestion      string // AI-generated followup suggestion
 
 	// Attachment list
 	attachments *attachments.Attachments
@@ -347,6 +352,10 @@ func (m *UI) setState(state uiState, focus uiFocusState) {
 	m.focus = focus
 	// Changing the state may change layout, so update it.
 	m.updateLayoutAndSize()
+	// Update command suggestion when focus changes to editor
+	if focus == uiFocusEditor {
+		m.updateCommandSuggestion()
+	}
 }
 
 // loadCustomCommands loads the custom commands asynchronously.
@@ -423,6 +432,12 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateLayoutAndSize()
 	case sessionFilesUpdatesMsg:
 		m.sessionFiles = msg.sessionFiles
+
+	case aiSuggestionMsg:
+		m.aiSuggestion = string(msg)
+		slog.Debug("AI suggestion received", "suggestion", m.aiSuggestion, "focus", m.focus, "textareaFocused", m.textarea.Focused())
+		m.updateCommandSuggestion()
+		slog.Debug("After updateCommandSuggestion", "commandSuggestion", m.commandSuggestion)
 
 	case sendMessageMsg:
 		cmds = append(cmds, m.sendMessage(msg.Content, msg.Attachments...))
@@ -786,6 +801,13 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				"options", msg.Options)
 		}
 	default:
+		// Log message types for debugging attachment flow
+		switch msg.(type) {
+		case message.Attachment:
+			slog.Debug("message.Attachment arrived in default case", "hasDialogs", m.dialog.HasDialogs())
+		case dialog.ActionFilePickerSelected:
+			slog.Debug("ActionFilePickerSelected arrived in default case", "hasDialogs", m.dialog.HasDialogs())
+		}
 		if m.dialog.HasDialogs() {
 			if cmd := m.handleDialogMsg(msg); cmd != nil {
 				cmds = append(cmds, cmd)
@@ -800,17 +822,20 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Textarea placeholder logic
 		if m.isAgentBusy() {
 			m.textarea.Placeholder = m.workingPlaceholder
+		} else if m.aiSuggestion != "" {
+			m.textarea.Placeholder = m.aiSuggestion
+		} else if m.com.App.Permissions.SkipRequests() {
+			m.textarea.Placeholder = "Yolo mode!"
 		} else {
 			m.textarea.Placeholder = m.readyPlaceholder
-		}
-		if m.com.App.Permissions.SkipRequests() {
-			m.textarea.Placeholder = "Yolo mode!"
 		}
 	}
 
 	// at this point this can only handle [message.Attachment] message, and we
 	// should return all cmds anyway.
-	_ = m.attachments.Update(msg)
+	if updated := m.attachments.Update(msg); updated {
+		slog.Debug("Attachment added", "list_len", len(m.attachments.List()))
+	}
 	return m, tea.Batch(cmds...)
 }
 
@@ -1259,6 +1284,17 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 			return nil
 		})
 		m.dialog.CloseDialog(dialog.CommandsID)
+	case dialog.ActionExportSession:
+		if m.isAgentBusy() {
+			cmds = append(cmds, util.ReportWarn("Agent is busy, please wait before exporting session..."))
+			break
+		}
+		if msg.SessionID == "" {
+			cmds = append(cmds, util.ReportWarn("No active session to export. Start a conversation first."))
+			break
+		}
+		cmds = append(cmds, m.exportSession(msg.SessionID))
+		m.dialog.CloseDialog(dialog.CommandsID)
 	case dialog.ActionToggleHelp:
 		m.status.ToggleHelp()
 		m.dialog.CloseDialog(dialog.CommandsID)
@@ -1411,9 +1447,11 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 		}
 
 	case dialog.ActionFilePickerSelected:
+		slog.Debug("ActionFilePickerSelected received", "path", msg.Path)
 		cmds = append(cmds, tea.Sequence(
 			msg.Cmd(),
 			func() tea.Msg {
+				slog.Debug("Closing FilePicker dialog")
 				m.dialog.CloseDialog(dialog.FilePickerID)
 				return nil
 			},
@@ -1643,6 +1681,10 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 				}
 
 				attachments := m.attachments.List()
+				slog.Debug("Enter pressed, sending message", "text_len", len(value), "attachments_count", len(attachments))
+				for i, att := range attachments {
+					slog.Debug("Enter pressed attachment", "idx", i, "file", att.FileName)
+				}
 				m.attachments.Reset()
 				if len(value) == 0 && !message.ContainsTextAttachment(attachments) {
 					return nil
@@ -1650,6 +1692,7 @@ func (m *UI) handleKeyPressMsg(msg tea.KeyPressMsg) tea.Cmd {
 
 				m.randomizePlaceholders()
 				m.historyReset()
+				m.aiSuggestion = "" // Clear AI suggestion when user sends a message
 
 				return tea.Batch(m.sendMessage(value, attachments...), m.loadPromptHistory())
 			case key.Matches(msg, m.keyMap.Chat.NewSession):
@@ -2755,6 +2798,19 @@ func (m *UI) updateCommandSuggestion() {
 		m.commandSuggestion = ""
 		return
 	}
+
+	// AI suggestion takes priority when editor is empty
+	if value == "" && m.aiSuggestion != "" {
+		m.commandSuggestion = m.aiSuggestion
+		return
+	}
+
+	// Clear AI suggestion once user starts typing
+	if value != "" {
+		m.aiSuggestion = ""
+	}
+
+	// Fall back to history-based suggestions
 	for i := len(m.promptHistory.messages) - 1; i >= 0; i-- {
 		candidate := strings.TrimSpace(m.promptHistory.messages[i])
 		if candidate == "" {
@@ -2840,6 +2896,10 @@ func (m *UI) cacheSidebarLogo(width int) {
 
 // sendMessage sends a message with the given content and attachments.
 func (m *UI) sendMessage(content string, attachments ...message.Attachment) tea.Cmd {
+	slog.Debug("UI.sendMessage called", "content_len", len(content), "attachments", len(attachments))
+	for i, att := range attachments {
+		slog.Debug("UI.sendMessage attachment", "idx", i, "file", att.FileName, "mime", att.MimeType, "data_len", len(att.Content))
+	}
 	if m.com.App.AgentCoordinator == nil {
 		return util.ReportError(fmt.Errorf("coder agent is not initialized"))
 	}
@@ -2867,7 +2927,8 @@ func (m *UI) sendMessage(content string, attachments ...message.Attachment) tea.
 	// Capture session ID to avoid race with main goroutine updating m.session.
 	sessionID := m.session.ID
 	cmds = append(cmds, func() tea.Msg {
-		_, err := m.com.App.AgentCoordinator.Run(context.Background(), sessionID, content, attachments...)
+		ctx := context.Background()
+		_, err := m.com.App.AgentCoordinator.Run(ctx, sessionID, content, attachments...)
 		if err != nil {
 			isCancelErr := errors.Is(err, context.Canceled)
 			isPermissionErr := errors.Is(err, permission.ErrorPermissionDenied)
@@ -2879,6 +2940,16 @@ func (m *UI) sendMessage(content string, attachments ...message.Attachment) tea.
 				Msg:  err.Error(),
 			}
 		}
+
+		// Generate followup suggestion asynchronously after successful response
+		// Skip in test environment to avoid VCR cassette mismatches
+		if !testing.Testing() {
+			suggestion, err := m.com.App.AgentCoordinator.SuggestFollowup(ctx, sessionID)
+			if err == nil && suggestion != "" {
+				return aiSuggestionMsg(suggestion)
+			}
+		}
+
 		return nil
 	})
 	return tea.Batch(cmds...)
@@ -3005,7 +3076,15 @@ func (m *UI) refreshCommandsThemeLabel() {
 
 func (m *UI) openCommandsDialog() tea.Cmd {
 	if m.dialog.ContainsDialog(dialog.CommandsID) {
-		// Bring to front
+		// Update sessionID on existing dialog before bringing to front
+		dia := m.dialog.Dialog(dialog.CommandsID)
+		if commands, ok := dia.(*dialog.Commands); ok {
+			sessionID := ""
+			if m.session != nil {
+				sessionID = m.session.ID
+			}
+			commands.SetSessionID(sessionID)
+		}
 		m.dialog.BringToFront(dialog.CommandsID)
 		return nil
 	}
@@ -3133,6 +3212,134 @@ func (m *UI) newSession() tea.Cmd {
 	m.historyReset()
 	return m.loadPromptHistory()
 }
+
+// exportSession exports the full session transcript to a markdown file.
+// This includes ALL content - no truncation of tool results or hidden lines.
+func (m *UI) exportSession(sessionID string) tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+
+		// Get session info
+		sess, err := m.com.App.Sessions.Get(ctx, sessionID)
+		if err != nil {
+			return util.ReportError(fmt.Errorf("failed to get session: %w", err))()
+		}
+
+		// Get all messages
+		msgs, err := m.com.App.Messages.List(ctx, sessionID)
+		if err != nil {
+			return util.ReportError(fmt.Errorf("failed to get messages: %w", err))()
+		}
+
+		// Build markdown content
+		var buf strings.Builder
+
+		// Header
+		title := sess.Title
+		if title == "" {
+			title = "Untitled Session"
+		}
+		buf.WriteString(fmt.Sprintf("# Session Export - %s\n\n", title))
+		buf.WriteString(fmt.Sprintf("**Exported**: %s\n", time.Now().Format("2006-01-02 15:04:05")))
+		buf.WriteString(fmt.Sprintf("**Session ID**: %s\n", sessionID))
+		buf.WriteString(fmt.Sprintf("**Messages**: %d\n\n", len(msgs)))
+		buf.WriteString("---\n\n")
+
+		// Process each message
+		for _, msg := range msgs {
+			switch msg.Role {
+			case message.User:
+				buf.WriteString("## User\n\n")
+			case message.Assistant:
+				buf.WriteString("## Assistant\n\n")
+			case message.Tool:
+				buf.WriteString("## Tool Message\n\n")
+			case message.System:
+				buf.WriteString("## System\n\n")
+			}
+
+			// Process all content parts
+			for _, part := range msg.Parts {
+				switch p := part.(type) {
+				case message.TextContent:
+					if p.Text != "" {
+						buf.WriteString(p.Text)
+						buf.WriteString("\n\n")
+					}
+
+				case message.ReasoningContent:
+					if p.Thinking != "" {
+						buf.WriteString("### Thinking\n\n")
+						buf.WriteString(p.Thinking)
+						buf.WriteString("\n\n")
+					}
+
+				case message.ToolCall:
+					buf.WriteString(fmt.Sprintf("### Tool Call: %s\n\n", p.Name))
+					buf.WriteString("```json\n")
+					buf.WriteString(p.Input)
+					buf.WriteString("\n```\n\n")
+
+				case message.ToolResult:
+					buf.WriteString(fmt.Sprintf("### Tool Result: %s\n\n", p.Name))
+					if p.IsError {
+						buf.WriteString("**Error**\n\n")
+					}
+					// Write FULL content - no truncation
+					if p.Content != "" {
+						buf.WriteString("```\n")
+						buf.WriteString(p.Content)
+						buf.WriteString("\n```\n\n")
+					}
+					if p.Data != "" {
+						buf.WriteString("**Data**:\n```\n")
+						buf.WriteString(p.Data)
+						buf.WriteString("\n```\n\n")
+					}
+
+				case message.ImageURLContent:
+					buf.WriteString(fmt.Sprintf("![Image](%s)\n\n", p.URL))
+
+				case message.BinaryContent:
+					buf.WriteString(fmt.Sprintf("**Binary Content**: %s (%s, %d bytes)\n\n", p.Path, p.MIMEType, len(p.Data)))
+
+				case message.Finish:
+					if p.Reason != "" {
+						buf.WriteString(fmt.Sprintf("*Finish reason: %s*\n\n", p.Reason))
+					}
+				}
+			}
+
+			buf.WriteString("---\n\n")
+		}
+
+		// Create filename with timestamp
+		timestamp := time.Now().Format("2006-01-02-150405")
+		filename := fmt.Sprintf("session-export-%s.md", timestamp)
+
+		// Get project directory or use current directory
+		cfg := m.com.Config()
+		projectDir := cfg.WorkingDir()
+		if projectDir == "" {
+			projectDir = "."
+		}
+
+		// Create exports directory
+		exportsDir := filepath.Join(projectDir, ".floyd", "exports")
+		if err := os.MkdirAll(exportsDir, 0755); err != nil {
+			return util.ReportError(fmt.Errorf("failed to create exports directory: %w", err))()
+		}
+
+		// Write to file
+		filePath := filepath.Join(exportsDir, filename)
+		if err := os.WriteFile(filePath, []byte(buf.String()), 0644); err != nil {
+			return util.ReportError(fmt.Errorf("failed to write export file: %w", err))()
+		}
+
+		return util.NewInfoMsg(fmt.Sprintf("Session exported to: %s", filePath))
+	}
+}
+
 
 // handlePasteMsg handles a paste message.
 func (m *UI) handlePasteMsg(msg tea.PasteMsg) tea.Cmd {

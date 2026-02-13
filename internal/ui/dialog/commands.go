@@ -149,6 +149,14 @@ func (c *Commands) ID() string {
 	return CommandsID
 }
 
+// SetSessionID updates the session ID and refreshes commands.
+func (c *Commands) SetSessionID(sessionID string) {
+	if c.sessionID != sessionID {
+		c.sessionID = sessionID
+		c.setCommandItems(c.selected)
+	}
+}
+
 // HandleMsg implements [Dialog].
 func (c *Commands) HandleMsg(msg tea.Msg) Action {
 	switch msg := msg.(type) {
@@ -415,6 +423,8 @@ func (c *Commands) defaultCommands() []*CommandItem {
 	if c.sessionID != "" {
 		commands = append(commands, NewCommandItem(c.com.Styles, "summarize", "Summarize Session", "", ActionSummarize{SessionID: c.sessionID}))
 	}
+	// Export Session is always visible but requires an active session to work
+	commands = append(commands, NewCommandItem(c.com.Styles, "export_session", "Export Session", "", ActionExportSession{SessionID: c.sessionID}))
 
 	// Add reasoning toggle for models that support it
 	cfg := c.com.Config()
