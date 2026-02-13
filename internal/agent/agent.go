@@ -87,6 +87,7 @@ type SessionAgent interface {
 	QueuedPromptsList(sessionID string) []string
 	ClearQueue(sessionID string)
 	Summarize(context.Context, string, fantasy.ProviderOptions) error
+	SuggestFollowup(ctx context.Context, sessionID string) (string, error)
 	Model() Model
 }
 
@@ -218,6 +219,10 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 	defer wg.Wait()
 
 	// Add the user message to the session.
+	slog.Debug("sessionAgent.Run received", "attachments", len(call.Attachments), "prompt_len", len(call.Prompt))
+	for i, att := range call.Attachments {
+		slog.Debug("sessionAgent.Run attachment", "idx", i, "file", att.FileName, "mime", att.MimeType, "data_len", len(att.Content))
+	}
 	_, err = a.createUserMessage(ctx, call)
 	if err != nil {
 		return nil, err
@@ -233,6 +238,10 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 	defer a.activeRequests.Del(call.SessionID)
 
 	history, files := a.preparePrompt(msgs, call.Attachments...)
+	slog.Debug("preparePrompt result", "history_len", len(history), "files_len", len(files))
+	for i, f := range files {
+		slog.Debug("preparePrompt file", "idx", i, "filename", f.Filename, "media_type", f.MediaType, "data_len", len(f.Data))
+	}
 
 	startTime := time.Now()
 	a.eventPromptSent(call.SessionID)
@@ -671,10 +680,74 @@ func (a *sessionAgent) Summarize(ctx context.Context, sessionID string, opts fan
 	return err
 }
 
+func (a *sessionAgent) SuggestFollowup(ctx context.Context, sessionID string) (string, error) {
+	if a.IsSessionBusy(sessionID) {
+		return "", ErrSessionBusy
+	}
+
+	// Use small model for efficiency
+	smallModel := a.smallModel.Get()
+
+	currentSession, err := a.sessions.Get(ctx, sessionID)
+	if err != nil {
+		return "", fmt.Errorf("failed to get session: %w", err)
+	}
+
+	msgs, err := a.getSessionMessages(ctx, currentSession)
+	if err != nil {
+		return "", err
+	}
+
+	if len(msgs) == 0 {
+		return "", nil
+	}
+
+	// Get last 2-4 messages for context (limit to avoid excessive tokens)
+	startIdx := 0
+	if len(msgs) > 4 {
+		startIdx = len(msgs) - 4
+	}
+	recentMsgs := msgs[startIdx:]
+
+	aiMsgs, _ := a.preparePrompt(recentMsgs)
+
+	systemPrompt := "You are a helpful AI assistant. Based on the conversation history, suggest the most likely next user action or question. Reply with ONLY a single short prompt (5-10 words max), no quotes, no explanation, no preamble."
+
+	agent := fantasy.NewAgent(smallModel.Model,
+		fantasy.WithSystemPrompt(systemPrompt),
+	)
+
+	var maxTokens int64 = 50
+	resp, err := agent.Generate(ctx, fantasy.AgentCall{
+		Prompt:          "What should the user ask or do next?",
+		Messages:        aiMsgs,
+		MaxOutputTokens: &maxTokens,
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	if resp == nil || resp.Response.Content.Text() == "" {
+		return "", nil
+	}
+
+	suggestion := strings.TrimSpace(resp.Response.Content.Text())
+	// Remove any quotes that might have been added
+	suggestion = strings.Trim(suggestion, `"'`)
+
+	slog.Debug("SuggestFollowup generated", "suggestion", suggestion, "length", len(suggestion))
+	return suggestion, nil
+}
+
 func (a *sessionAgent) getCacheControlOptions() fantasy.ProviderOptions {
-	if t, _ := strconv.ParseBool(os.Getenv("FLOYD_DISABLE_ANTHROPIC_CACHE")); t {
+	if t, _ := strconv.ParseBool(os.Getenv("FLOYD_DISABLE_CACHE")); t {
 		return fantasy.ProviderOptions{}
 	}
+	
+	// Static cache key for consistent prompt caching across requests
+	cacheKey := "floyd-prompt-cache-v1"
+	
 	return fantasy.ProviderOptions{
 		anthropic.Name: &anthropic.ProviderCacheControlOptions{
 			CacheControl: anthropic.CacheControl{Type: "ephemeral"},
@@ -684,6 +757,9 @@ func (a *sessionAgent) getCacheControlOptions() fantasy.ProviderOptions {
 		},
 		vercel.Name: &anthropic.ProviderCacheControlOptions{
 			CacheControl: anthropic.CacheControl{Type: "ephemeral"},
+		},
+		openai.Name: &openai.ProviderOptions{
+			PromptCacheKey: &cacheKey,
 		},
 	}
 }
