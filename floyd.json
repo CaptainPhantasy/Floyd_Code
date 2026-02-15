@@ -24,7 +24,7 @@
         }
       ]
     },
-    "glm": {
+    "zai": {
       "id": "zai",
       "name": "GLM-5",
       "type": "openai-compat",

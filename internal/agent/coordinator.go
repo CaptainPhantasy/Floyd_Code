@@ -56,6 +56,7 @@ type Coordinator interface {
 	QueuedPromptsList(sessionID string) []string
 	ClearQueue(sessionID string)
 	Summarize(context.Context, string) error
+	SuggestFollowup(ctx context.Context, sessionID string) (string, error)
 	Model() Model
 	UpdateModels(ctx context.Context) error
 }
@@ -133,14 +134,19 @@ func (c *coordinator) Run(ctx context.Context, sessionID string, prompt string, 
 		maxTokens = model.ModelCfg.MaxTokens
 	}
 
+	// DEBUG: Log attachment filtering
+	slog.Debug("attachment filtering", "model", model.CatwalkCfg.Name, "supports_images", model.CatwalkCfg.SupportsImages, "attachments_count", len(attachments))
+
 	if !model.CatwalkCfg.SupportsImages && attachments != nil {
 		// filter out image attachments
 		filteredAttachments := make([]message.Attachment, 0, len(attachments))
 		for _, att := range attachments {
+			slog.Debug("checking attachment", "file", att.FileName, "is_text", att.IsText(), "mime", att.MimeType)
 			if att.IsText() {
 				filteredAttachments = append(filteredAttachments, att)
 			}
 		}
+		slog.Debug("attachments filtered", "original", len(attachments), "filtered", len(filteredAttachments))
 		attachments = filteredAttachments
 	}
 
@@ -883,6 +889,10 @@ func (c *coordinator) Summarize(ctx context.Context, sessionID string) error {
 		return errors.New("model provider not configured")
 	}
 	return c.currentAgent.Summarize(ctx, sessionID, getProviderOptions(c.currentAgent.Model(), providerCfg))
+}
+
+func (c *coordinator) SuggestFollowup(ctx context.Context, sessionID string) (string, error) {
+	return c.currentAgent.SuggestFollowup(ctx, sessionID)
 }
 
 func (c *coordinator) isUnauthorized(err error) bool {

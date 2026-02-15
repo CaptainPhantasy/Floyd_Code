@@ -468,10 +468,9 @@ func (c *Config) applyMCPDefaults() {
 			Args:    []string{"/Volumes/Storage/MCP/floyd-supercache-server/dist/index.js"},
 		},
 		"floyd-terminal-server": {
-			Type:     MCPStdio,
-			Command:  "node",
-			Args:     []string{"/Volumes/Storage/MCP/floyd-terminal-server/dist/index.js"},
-			Disabled: true,
+			Type:    MCPStdio,
+			Command: "node",
+			Args:    []string{"/Volumes/Storage/MCP/floyd-terminal-server/dist/index.js"},
 		},
 		"hivemind-v2": {
 			Type:     MCPStdio,
@@ -498,35 +497,38 @@ func (c *Config) applyMCPDefaults() {
 			Disabled: true,
 		},
 		"lab-lead-server": {
-			Type:     MCPStdio,
-			Command:  "node",
-			Args:     []string{"/Volumes/Storage/MCP/lab-lead-server/dist/index.js"},
-			Disabled: true,
+			Type:    MCPStdio,
+			Command: "node",
+			Args:    []string{"/Volumes/Storage/MCP/lab-lead-server/dist/index.js"},
 		},
 		"web-search-prime": {
-			Type: MCPHttp,
-			URL:  "https://api.z.ai/api/mcp/web_search_prime/mcp",
+			Type:     MCPHttp,
+			URL:      "https://api.z.ai/api/mcp/web_search_prime/mcp",
+			Disabled: true,
 			Headers: map[string]string{
 				"Authorization": "Bearer $ZAI_API_KEY",
 			},
 		},
 		"zai-mcp-server": {
-			Type: MCPHttp,
-			URL:  "https://api.z.ai/api/mcp/zai_mcp_server/mcp",
+			Type:     MCPHttp,
+			URL:      "https://api.z.ai/api/mcp/zai_mcp_server/mcp",
+			Disabled: true,
 			Headers: map[string]string{
 				"Authorization": "Bearer $ZAI_API_KEY",
 			},
 		},
 		"web-reader": {
-			Type: MCPHttp,
-			URL:  "https://api.z.ai/api/mcp/web_reader/mcp",
+			Type:     MCPHttp,
+			URL:      "https://api.z.ai/api/mcp/web_reader/mcp",
+			Disabled: true,
 			Headers: map[string]string{
 				"Authorization": "Bearer $ZAI_API_KEY",
 			},
 		},
 		"zread": {
-			Type: MCPHttp,
-			URL:  "https://api.z.ai/api/mcp/zread/mcp",
+			Type:     MCPHttp,
+			URL:      "https://api.z.ai/api/mcp/zread/mcp",
+			Disabled: true,
 			Headers: map[string]string{
 				"Authorization": "Bearer $ZAI_API_KEY",
 			},
@@ -683,6 +685,11 @@ func (c *Config) configureSelectedModels(knownProviders []catwalk.Provider) erro
 				large.ReasoningEffort = largeModelSelected.ReasoningEffort
 			}
 			large.Think = largeModelSelected.Think
+			if largeModelSelected.ContextWindow > 0 {
+				large.ContextWindow = largeModelSelected.ContextWindow
+			} else {
+				large.ContextWindow = int64(model.ContextWindow)
+			}
 			if largeModelSelected.Temperature != nil {
 				large.Temperature = largeModelSelected.Temperature
 			}
@@ -725,6 +732,11 @@ func (c *Config) configureSelectedModels(knownProviders []catwalk.Provider) erro
 			}
 			if smallModelSelected.ReasoningEffort != "" {
 				small.ReasoningEffort = smallModelSelected.ReasoningEffort
+			}
+			if smallModelSelected.ContextWindow > 0 {
+				small.ContextWindow = smallModelSelected.ContextWindow
+			} else {
+				small.ContextWindow = int64(model.ContextWindow)
 			}
 			if smallModelSelected.Temperature != nil {
 				small.Temperature = smallModelSelected.Temperature
