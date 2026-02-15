@@ -33,16 +33,15 @@
       "system_prompt_prefix": "You are a precise coding assistant. Think before acting. Use view to read files before editing. Use multiedit to batch changes in one file. Always run tests to verify your work. Output code only — no conversational filler.",
       "extra_body": {
         "thinking": {
-          "type": "enabled",
-          "clear_thinking": true
+          "type": "enabled"
         }
       },
       "models": [
         {
           "id": "glm-5",
           "name": "GLM-5",
-          "context_window": 204800,
-          "default_max_tokens": 32768,
+          "context_window": 200000,
+          "default_max_tokens": 131072,
           "can_reason": true,
           "options": {
             "temperature": 0.1
@@ -57,7 +56,7 @@
       "command": "npx",
       "args": ["-y", "@z_ai/mcp-server"],
       "env": {
-        "Z_AI_API_KEY": "94667dec93a143dba1fb01d397412752.6qLk80XghszPmpsw",
+        "Z_AI_API_KEY": "d793c9fc6ac24186ab97bcdedc3c81ed.fJMCpIe1NnypuKKD",
         "Z_AI_MODE": "ZAI"
       }
     },
@@ -65,21 +64,21 @@
       "type": "http",
       "url": "https://api.z.ai/api/mcp/web_search_prime/mcp",
       "headers": {
-        "Authorization": "Bearer 94667dec93a143dba1fb01d397412752.6qLk80XghszPmpsw"
+        "Authorization": "Bearer d793c9fc6ac24186ab97bcdedc3c81ed.fJMCpIe1NnypuKKD"
       }
     },
     "web-reader": {
       "type": "http",
       "url": "https://api.z.ai/api/mcp/web_reader/mcp",
       "headers": {
-        "Authorization": "Bearer 94667dec93a143dba1fb01d397412752.6qLk80XghszPmpsw"
+        "Authorization": "Bearer d793c9fc6ac24186ab97bcdedc3c81ed.fJMCpIe1NnypuKKD"
       }
     },
     "zread": {
       "type": "http",
       "url": "https://api.z.ai/api/mcp/zread/mcp",
       "headers": {
-        "Authorization": "Bearer 94667dec93a143dba1fb01d397412752.6qLk80XghszPmpsw"
+        "Authorization": "Bearer d793c9fc6ac24186ab97bcdedc3c81ed.fJMCpIe1NnypuKKD"
       }
     }
   },
