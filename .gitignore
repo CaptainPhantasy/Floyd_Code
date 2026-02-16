@@ -53,3 +53,10 @@ completions/floyd.*sh
 floyd.json
 .floyd/
 *.db
+
+# Secrets - NEVER commit these
+floyd.json
+*.pem
+*.key
+credentials.json
+secrets.json
