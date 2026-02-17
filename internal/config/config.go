@@ -29,14 +29,12 @@ import (
 const (
 	appName              = "floyd"
 	defaultDataDirectory = ".floyd"
-	defaultInitializeAs  = "AGENTS.md"
+	defaultInitializeAs  = "FLOYD.md"
 )
 
 var defaultContextPaths = []string{
 	"FLOYD.md",
 	"FLOYD.local.md",
-	"AGENTS.md",
-	"CLAUDE.md",
 }
 
 type SelectedModelType string
@@ -72,6 +70,7 @@ type SelectedModel struct {
 
 	// Overrides the default model configuration.
 	MaxTokens        int64    `json:"max_tokens,omitempty" jsonschema:"description=Maximum number of tokens for model responses,maximum=200000,example=4096"`
+	ContextWindow    int64    `json:"context_window,omitempty" jsonschema:"description=Override the model's context window size (auto-summarization threshold),example=200000"`
 	Temperature      *float64 `json:"temperature,omitempty" jsonschema:"description=Sampling temperature,minimum=0,maximum=1,example=0.7"`
 	TopP             *float64 `json:"top_p,omitempty" jsonschema:"description=Top-p (nucleus) sampling parameter,minimum=0,maximum=1,example=0.9"`
 	TopK             *int64   `json:"top_k,omitempty" jsonschema:"description=Top-k sampling parameter"`
@@ -154,16 +153,17 @@ func (pc *ProviderConfig) SetupGitHubCopilot() {
 type MCPType string
 
 const (
-	MCPStdio MCPType = "stdio"
-	MCPSSE   MCPType = "sse"
-	MCPHttp  MCPType = "http"
+	MCPStdio         MCPType = "stdio"
+	MCPSSE           MCPType = "sse"
+	MCPHttp          MCPType = "http"
+	MCPStreamableHttp MCPType = "streamable-http" // MCP 2.0 streamable HTTP transport
 )
 
 type MCPConfig struct {
 	Command       string            `json:"command,omitempty" jsonschema:"description=Command to execute for stdio MCP servers,example=npx"`
 	Env           map[string]string `json:"env,omitempty" jsonschema:"description=Environment variables to set for the MCP server"`
 	Args          []string          `json:"args,omitempty" jsonschema:"description=Arguments to pass to the MCP server command"`
-	Type          MCPType           `json:"type" jsonschema:"required,description=Type of MCP connection,enum=stdio,enum=sse,enum=http,default=stdio"`
+	Type          MCPType           `json:"type" jsonschema:"required,description=Type of MCP connection,enum=stdio,enum=sse,enum=http,enum=streamable-http,default=stdio"`
 	URL           string            `json:"url,omitempty" jsonschema:"description=URL for HTTP or SSE MCP servers,format=uri,example=http://localhost:3000/mcp"`
 	Disabled      bool              `json:"disabled,omitempty" jsonschema:"description=Whether this MCP server is disabled,default=false"`
 	DisabledTools []string          `json:"disabled_tools,omitempty" jsonschema:"description=List of tools from this MCP server to disable,example=get-library-doc"`
@@ -248,9 +248,10 @@ type Options struct {
 	DisableMetrics            bool         `json:"disable_metrics,omitempty" jsonschema:"description=Disable sending metrics,default=false"`
 	FileOps                   *FileOps     `json:"file_ops,omitempty" jsonschema:"description=File operation settings"`
 	Execution                 *Execution   `json:"execution,omitempty" jsonschema:"description=Execution settings for shell commands"`
-	InitializeAs              string       `json:"initialize_as,omitempty" jsonschema:"description=Name of the context file to create/update during project initialization,default=AGENTS.md,example=AGENTS.md,example=CRUSH.md,example=CLAUDE.md,example=docs/LLMs.md"`
+	InitializeAs              string       `json:"initialize_as,omitempty" jsonschema:"description=Name of the context file to create/update during project initialization,default=FLOYD.md,example=FLOYD.md,example=AGENTS.md,example=CLAUDE.md,example=docs/LLMs.md"`
 	AutoLSP                   *bool        `json:"auto_lsp,omitempty" jsonschema:"description=Automatically setup LSPs based on root markers,default=true"`
 	Progress                  *bool        `json:"progress,omitempty" jsonschema:"description=Show indeterminate progress updates during long operations,default=true"`
+	CacheMode                 string       `json:"cache_mode,omitempty" jsonschema:"description=Prompt caching mode,enum=auto,enum=static,enum=disabled,default=auto"`
 }
 
 type FileOps struct {
@@ -446,6 +447,24 @@ func (c *Config) GetModelByType(modelType SelectedModelType) *catwalk.Model {
 		return nil
 	}
 	return c.GetModel(model.Provider, model.Model)
+}
+
+// GetModelContextWindow returns the context window for the model, respecting any override.
+func (c *Config) GetModelContextWindow(modelType SelectedModelType) int64 {
+	selectedModel, ok := c.Models[modelType]
+	if !ok {
+		return 0
+	}
+	// Check for override first
+	if selectedModel.ContextWindow > 0 {
+		return selectedModel.ContextWindow
+	}
+	// Fall back to catwalk model definition
+	catwalkModel := c.GetModel(selectedModel.Provider, selectedModel.Model)
+	if catwalkModel != nil {
+		return int64(catwalkModel.ContextWindow)
+	}
+	return 0
 }
 
 func (c *Config) LargeModel() *catwalk.Model {

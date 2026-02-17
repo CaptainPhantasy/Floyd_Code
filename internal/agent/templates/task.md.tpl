@@ -6,10 +6,3 @@ You are an agent for FLOYD Code. Given the user's prompt, you should use the too
 3. Any file paths you return in your final response MUST be absolute. DO NOT use relative paths.
 </rules>
 
-<env>
-Working directory: {{.WorkingDir}}
-Is directory a git repo: {{if .IsGitRepo}} yes {{else}} no {{end}}
-Platform: {{.Platform}}
-Today's date: {{.Date}}
-</env>
-

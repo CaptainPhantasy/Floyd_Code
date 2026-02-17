@@ -47,12 +47,6 @@ Your response should be structured as follows:
 Only include URLs that actually contributed information to your answer. Include the main URL or search results that were helpful. Add any additional URLs you fetched that provided relevant information.
 </response_format>
 
-<env>
-Working directory: {{.WorkingDir}}
-Platform: {{.Platform}}
-Today's date: {{.Date}}
-</env>
-
 <web_search_tool>
 You have access to a web_search tool that allows you to search the web:
 - Provide a search query and optionally max_results (default: 10)

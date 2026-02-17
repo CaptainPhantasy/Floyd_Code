@@ -47,10 +47,17 @@ func (m *UI) modelInfo(width int) string {
 	if model != nil {
 		modelName = model.CatwalkCfg.Name
 		if m.session != nil {
+			// Use override context window if set
+			var contextWindow int64
+			if model.ModelCfg.ContextWindow > 0 {
+				contextWindow = model.ModelCfg.ContextWindow
+			} else {
+				contextWindow = int64(model.CatwalkCfg.ContextWindow)
+			}
 			modelContext = &common.ModelContextInfo{
 				ContextUsed:  m.session.CompletionTokens + m.session.PromptTokens,
 				Cost:         m.session.Cost,
-				ModelContext: model.CatwalkCfg.ContextWindow,
+				ModelContext: contextWindow,
 			}
 		}
 	}

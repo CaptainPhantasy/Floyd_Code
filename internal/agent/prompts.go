@@ -17,6 +17,9 @@ var taskPromptTmpl []byte
 //go:embed templates/initialize.md.tpl
 var initializePromptTmpl []byte
 
+//go:embed templates/floyd_protocol.md.tpl
+var floydProtocolTmpl []byte
+
 func coderPrompt(opts ...prompt.Option) (*prompt.Prompt, error) {
 	systemPrompt, err := prompt.NewPrompt("coder", string(coderPromptTmpl), opts...)
 	if err != nil {
@@ -39,4 +42,9 @@ func InitializePrompt(cfg config.Config) (string, error) {
 		return "", err
 	}
 	return systemPrompt.Build(context.Background(), "", "", cfg)
+}
+
+// FloydProtocol returns the standard FLOYD.md protocol content.
+func FloydProtocol() string {
+	return string(floydProtocolTmpl)
 }

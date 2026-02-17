@@ -1494,6 +1494,14 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 			break
 		}
 		cmds = append(cmds, m.runMCPPrompt(msg.ClientID, msg.PromptID, msg.Args))
+	case dialog.ActionToggleMCP:
+		cmds = append(cmds, m.toggleMCP(msg.Name))
+		// Refresh the MCP dialog to show updated state
+		if dia := m.dialog.Dialog(dialog.MCPServersID); dia != nil {
+			if mcpDialog, ok := dia.(*dialog.MCPServers); ok {
+				mcpDialog.Refresh()
+			}
+		}
 	default:
 		cmds = append(cmds, util.CmdHandler(msg))
 	}
@@ -3018,6 +3026,10 @@ func (m *UI) openDialog(id string) tea.Cmd {
 		if cmd := m.openReasoningDialog(); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
+	case dialog.MCPServersID:
+		if cmd := m.openMCPServersDialog(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 	case dialog.QuitID:
 		if cmd := m.openQuitDialog(); cmd != nil {
 			cmds = append(cmds, cmd)
@@ -3118,6 +3130,50 @@ func (m *UI) openReasoningDialog() tea.Cmd {
 
 	m.dialog.OpenDialog(reasoningDialog)
 	return nil
+}
+
+// openMCPServersDialog opens the MCP servers management dialog.
+func (m *UI) openMCPServersDialog() tea.Cmd {
+	if m.dialog.ContainsDialog(dialog.MCPServersID) {
+		m.dialog.BringToFront(dialog.MCPServersID)
+		return nil
+	}
+
+	mcpDialog, err := dialog.NewMCPServers(m.com)
+	if err != nil {
+		return util.ReportError(err)
+	}
+
+	m.dialog.OpenDialog(mcpDialog)
+	return nil
+}
+
+// toggleMCP toggles the enabled/disabled state of an MCP server.
+func (m *UI) toggleMCP(name string) tea.Cmd {
+	cfg := m.com.Config()
+
+	mcpConfig, exists := cfg.MCP[name]
+	if !exists {
+		return util.ReportError(fmt.Errorf("MCP server %q not found", name))
+	}
+
+	// Toggle the disabled state
+	mcpConfig.Disabled = !mcpConfig.Disabled
+	cfg.MCP[name] = mcpConfig
+
+	// Persist the change to config
+	configKey := fmt.Sprintf("mcp.%s.disabled", name)
+	if err := cfg.SetConfigField(configKey, mcpConfig.Disabled); err != nil {
+		return util.ReportError(fmt.Errorf("failed to save MCP config: %w", err))
+	}
+
+	status := "enabled"
+	if mcpConfig.Disabled {
+		status = "disabled"
+	}
+	return func() tea.Msg {
+		return util.NewInfoMsg(fmt.Sprintf("MCP server %q %s (restart session to apply)", name, status))
+	}
 }
 
 // openSessionsDialog opens the sessions dialog. If the dialog is already open,
@@ -3325,7 +3381,7 @@ func (m *UI) exportSession(sessionID string) tea.Cmd {
 		}
 
 		// Create exports directory
-		exportsDir := filepath.Join(projectDir, ".floyd", "exports")
+		exportsDir := filepath.Join(projectDir, "docs", "exports")
 		if err := os.MkdirAll(exportsDir, 0755); err != nil {
 			return util.ReportError(fmt.Errorf("failed to create exports directory: %w", err))()
 		}

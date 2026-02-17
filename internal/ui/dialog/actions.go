@@ -60,6 +60,9 @@ type (
 	ActionSummarize         struct {
 		SessionID string
 	}
+	ActionExportSession     struct {
+		SessionID string
+	}
 	// ActionSelectReasoningEffort is a message indicating a reasoning effort has been selected.
 	ActionSelectReasoningEffort struct {
 		Effort string
@@ -83,6 +86,12 @@ type (
 		Arguments   []commands.Argument
 		Args        map[string]string // Actual argument values
 	}
+	// ActionToggleMCP is a message to toggle an MCP server's enabled state.
+	ActionToggleMCP struct {
+		Name string
+	}
+	// ActionConfigAudit opens the config audit dialog.
+	ActionConfigAudit struct{}
 )
 
 // Messages for API key input dialog.

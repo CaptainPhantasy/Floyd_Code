@@ -1,22 +1,4 @@
 package version
 
-import "runtime/debug"
-
-// Build-time parameters set via -ldflags
-
-var Version = "beta"
-
-// A user may install floyd using `go install github.com/legacy-ai/floyd@latest`.
-// without -ldflags, in which case the version above is unset. As a workaround
-// we use the embedded build version that *is* set when using `go install` (and
-// is only set for `go install` and not for `go build`).
-func init() {
-	info, ok := debug.ReadBuildInfo()
-	if !ok {
-		return
-	}
-	mainVersion := info.Main.Version
-	if mainVersion != "" && mainVersion != "(devel)" {
-		Version = mainVersion
-	}
-}
+// Version is set at build time via -ldflags or defaults to v3.6
+var Version = "v3.6"

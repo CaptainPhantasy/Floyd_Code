@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	uv "github.com/charmbracelet/ultraviolet"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/legacy-ai/floyd/internal/config"
 	"github.com/legacy-ai/floyd/internal/csync"
 	"github.com/legacy-ai/floyd/internal/fsext"
@@ -12,8 +14,6 @@ import (
 	"github.com/legacy-ai/floyd/internal/session"
 	"github.com/legacy-ai/floyd/internal/ui/common"
 	"github.com/legacy-ai/floyd/internal/ui/styles"
-	uv "github.com/charmbracelet/ultraviolet"
-	"github.com/charmbracelet/x/ansi"
 )
 
 const (
@@ -118,8 +118,11 @@ func renderHeaderDetails(
 	}
 
 	agentCfg := config.Get().Agents[config.AgentCoder]
-	model := config.Get().GetModelByType(agentCfg.Model)
-	percentage := (float64(session.CompletionTokens+session.PromptTokens) / float64(model.ContextWindow)) * 100
+	contextWindow := config.Get().GetModelContextWindow(agentCfg.Model)
+	var percentage float64
+	if contextWindow > 0 {
+		percentage = (float64(session.CompletionTokens+session.PromptTokens) / float64(contextWindow)) * 100
+	}
 	formattedPercentage := t.Header.Percentage.Render(fmt.Sprintf("%d%%", int(percentage)))
 	parts = append(parts, formattedPercentage)
 

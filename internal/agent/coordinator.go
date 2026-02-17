@@ -103,12 +103,12 @@ func NewCoordinator(
 	}
 
 	// TODO: make this dynamic when we support multiple agents
-	prompt, err := coderPrompt(prompt.WithWorkingDir(c.cfg.WorkingDir()))
+	promptTemplate, err := coderPrompt(prompt.WithWorkingDir(c.cfg.WorkingDir()))
 	if err != nil {
 		return nil, err
 	}
 
-	agent, err := c.buildAgent(ctx, prompt, agentCfg, false)
+	agent, err := c.buildAgent(ctx, promptTemplate, agentCfg, false)
 	if err != nil {
 		return nil, err
 	}
@@ -357,7 +357,7 @@ func mergeCallOptions(model Model, cfg config.ProviderConfig) (fantasy.ProviderO
 	return modelOptions, temp, topP, topK, freqPenalty, presPenalty
 }
 
-func (c *coordinator) buildAgent(ctx context.Context, prompt *prompt.Prompt, agent config.Agent, isSubAgent bool) (SessionAgent, error) {
+func (c *coordinator) buildAgent(ctx context.Context, promptTemplate *prompt.Prompt, agent config.Agent, isSubAgent bool) (SessionAgent, error) {
 	large, small, err := c.buildAgentModels(ctx, isSubAgent)
 	if err != nil {
 		return nil, err
@@ -378,11 +378,16 @@ func (c *coordinator) buildAgent(ctx context.Context, prompt *prompt.Prompt, age
 	})
 
 	c.readyWg.Go(func() error {
-		systemPrompt, err := prompt.Build(ctx, large.Model.Provider(), large.Model.Model(), *c.cfg)
+		systemPrompt, err := promptTemplate.Build(ctx, large.Model.Provider(), large.Model.Model(), *c.cfg)
 		if err != nil {
 			return err
 		}
-		result.SetSystemPrompt(systemPrompt)
+
+		// Split into static and dynamic parts for prompt caching
+		promptData := prompt.PromptDataForDynamic(ctx, c.cfg.WorkingDir(), *c.cfg)
+		cacheable := prompt.BuildCacheablePrompts(ctx, systemPrompt, promptData)
+		result.SetSystemPrompt(cacheable.StaticPrompt)
+		result.SetDynamicContext(cacheable.DynamicContext)
 		return nil
 	})
 
@@ -811,6 +816,7 @@ func (c *coordinator) buildProvider(providerCfg config.ProviderConfig, model con
 			}
 			providerCfg.ExtraBody["tool_stream"] = true
 		}
+		slog.Debug("Building openai-compat provider", "id", providerCfg.ID, "model", model.Model, "extra_body", providerCfg.ExtraBody)
 		return c.buildOpenaiCompatProvider(baseURL, apiKey, headers, providerCfg.ExtraBody, providerCfg.ID, isSubAgent)
 	case hyper.Name:
 		return c.buildHyperProvider(baseURL, apiKey)

@@ -381,7 +381,7 @@ func createTransport(ctx context.Context, m config.MCPConfig, resolver config.Va
 		return &mcp.CommandTransport{
 			Command: cmd,
 		}, nil
-	case config.MCPHttp:
+	case config.MCPHttp, config.MCPStreamableHttp:
 		if strings.TrimSpace(m.URL) == "" {
 			return nil, fmt.Errorf("mcp http config requires a non-empty 'url' field")
 		}

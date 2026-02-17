@@ -28,9 +28,11 @@ import (
 	"charm.land/fantasy/providers/bedrock"
 	"charm.land/fantasy/providers/google"
 	"charm.land/fantasy/providers/openai"
+	"charm.land/fantasy/providers/openaicompat"
 	"charm.land/fantasy/providers/openrouter"
 	"charm.land/fantasy/providers/vercel"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/exp/charmtone"
 	"github.com/legacy-ai/floyd/internal/agent/hyper"
 	"github.com/legacy-ai/floyd/internal/agent/tools"
 	"github.com/legacy-ai/floyd/internal/agent/tools/mcp"
@@ -40,7 +42,6 @@ import (
 	"github.com/legacy-ai/floyd/internal/permission"
 	"github.com/legacy-ai/floyd/internal/session"
 	"github.com/legacy-ai/floyd/internal/stringext"
-	"github.com/charmbracelet/x/exp/charmtone"
 )
 
 const (
@@ -79,6 +80,7 @@ type SessionAgent interface {
 	SetModels(large Model, small Model)
 	SetTools(tools []fantasy.AgentTool)
 	SetSystemPrompt(systemPrompt string)
+	SetDynamicContext(dynamicContext string)
 	Cancel(sessionID string)
 	CancelAll()
 	IsSessionBusy(sessionID string) bool
@@ -102,6 +104,7 @@ type sessionAgent struct {
 	smallModel         *csync.Value[Model]
 	systemPromptPrefix *csync.Value[string]
 	systemPrompt       *csync.Value[string]
+	dynamicContext     *csync.Value[string]
 	tools              *csync.Slice[fantasy.AgentTool]
 
 	isSubAgent           bool
@@ -135,6 +138,7 @@ func NewSessionAgent(
 		smallModel:           csync.NewValue(opts.SmallModel),
 		systemPromptPrefix:   csync.NewValue(opts.SystemPromptPrefix),
 		systemPrompt:         csync.NewValue(opts.SystemPrompt),
+		dynamicContext:       csync.NewValue[string](""),
 		isSubAgent:           opts.IsSubAgent,
 		sessions:             opts.Sessions,
 		messages:             opts.Messages,
@@ -277,17 +281,35 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 
 			prepared.Messages = a.workaroundProviderMediaLimitations(prepared.Messages, largeModel)
 
+			// Inject dynamic context as first user message (after system messages)
+			// This is the non-cacheable part that changes per-request
+			if dynamicCtx := a.dynamicContext.Get(); dynamicCtx != "" {
+				// Find the first non-system message position
+				insertIdx := 0
+				for i, msg := range prepared.Messages {
+					if msg.Role != fantasy.MessageRoleSystem {
+						insertIdx = i
+						break
+					}
+				}
+				// Insert dynamic context as user message WITHOUT cache control
+				dynamicMsg := fantasy.NewUserMessage(dynamicCtx)
+				// Ensure no cache control on this dynamic message
+				dynamicMsg.ProviderOptions = nil
+				prepared.Messages = append(prepared.Messages[:insertIdx], append([]fantasy.Message{dynamicMsg}, prepared.Messages[insertIdx:]...)...)
+			}
+
 			lastSystemRoleInx := 0
 			systemMessageUpdated := false
 			for i, msg := range prepared.Messages {
-				// Only add cache control to the last message.
+				// Only add cache control to the last system message.
 				if msg.Role == fantasy.MessageRoleSystem {
 					lastSystemRoleInx = i
 				} else if !systemMessageUpdated {
 					prepared.Messages[lastSystemRoleInx].ProviderOptions = a.getCacheControlOptions()
 					systemMessageUpdated = true
 				}
-				// Than add cache control to the last 2 messages.
+				// Then add cache control to the last 2 messages.
 				if i > len(prepared.Messages)-3 {
 					prepared.Messages[i].ProviderOptions = a.getCacheControlOptions()
 				}
@@ -414,11 +436,15 @@ func (a *sessionAgent) Run(ctx context.Context, call SessionAgentCall) (*fantasy
 		},
 		StopWhen: []fantasy.StopCondition{
 			func(_ []fantasy.StepResult) bool {
+				// Use override context window if set, otherwise use catwalk's value
 				cw := int64(largeModel.CatwalkCfg.ContextWindow)
+				if largeModel.ModelCfg.ContextWindow > 0 {
+					cw = largeModel.ModelCfg.ContextWindow
+				}
 				tokens := currentSession.CompletionTokens + currentSession.PromptTokens
 				remaining := cw - tokens
 				var threshold int64
-				if cw > largeContextWindowThreshold {
+				if cw >= largeContextWindowThreshold {
 					threshold = largeContextWindowBuffer
 				} else {
 					threshold = int64(float64(cw) * smallContextWindowRatio)
@@ -744,10 +770,10 @@ func (a *sessionAgent) getCacheControlOptions() fantasy.ProviderOptions {
 	if t, _ := strconv.ParseBool(os.Getenv("FLOYD_DISABLE_CACHE")); t {
 		return fantasy.ProviderOptions{}
 	}
-	
-	// Static cache key for consistent prompt caching across requests
-	cacheKey := "floyd-prompt-cache-v1"
-	
+
+	// Updated cache key for v2 prompt caching (static system prompt only)
+	cacheKey := "floyd-prompt-cache-v2"
+
 	return fantasy.ProviderOptions{
 		anthropic.Name: &anthropic.ProviderCacheControlOptions{
 			CacheControl: anthropic.CacheControl{Type: "ephemeral"},
@@ -759,6 +785,9 @@ func (a *sessionAgent) getCacheControlOptions() fantasy.ProviderOptions {
 			CacheControl: anthropic.CacheControl{Type: "ephemeral"},
 		},
 		openai.Name: &openai.ProviderOptions{
+			PromptCacheKey: &cacheKey,
+		},
+		openaicompat.Name: &openai.ProviderOptions{
 			PromptCacheKey: &cacheKey,
 		},
 	}
@@ -1083,6 +1112,10 @@ func (a *sessionAgent) SetTools(tools []fantasy.AgentTool) {
 
 func (a *sessionAgent) SetSystemPrompt(systemPrompt string) {
 	a.systemPrompt.Set(systemPrompt)
+}
+
+func (a *sessionAgent) SetDynamicContext(dynamicContext string) {
+	a.dynamicContext.Set(dynamicContext)
 }
 
 func (a *sessionAgent) Model() Model {
