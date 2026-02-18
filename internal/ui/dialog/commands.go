@@ -478,7 +478,7 @@ func (c *Commands) defaultCommands() []*CommandItem {
 		NewCommandItem(c.com.Styles, "toggle_yolo", "Toggle Yolo Mode", "", ActionToggleYoloMode{}),
 		NewCommandItem(c.com.Styles, "toggle_terminal", "Toggle Terminal", "ctrl+t", ActionToggleTerminal{}),
 		NewCommandItem(c.com.Styles, "toggle_mcp", "MCP Servers", "", ActionOpenDialog{MCPServersID}),
-		NewCommandItem(c.com.Styles, "config_audit", "Config Audit", "", ActionConfigAudit{}),
+		NewCommandItem(c.com.Styles, "config_audit", "Config Audit", "", ActionOpenDialog{ConfigAuditID}),
 		NewCommandItem(c.com.Styles, "cycle_theme", themeLabel, "←/→", ActionCycleTheme{}),
 		NewCommandItem(c.com.Styles, "toggle_help", "Toggle Help", "ctrl+g", ActionToggleHelp{}),
 		NewCommandItem(c.com.Styles, "init", "Initialize Project", "", ActionInitializeProject{}),

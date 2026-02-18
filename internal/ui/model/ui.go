@@ -3034,6 +3034,10 @@ func (m *UI) openDialog(id string) tea.Cmd {
 		if cmd := m.openQuitDialog(); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
+	case dialog.ConfigAuditID:
+		if cmd := m.openConfigAuditDialog(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 	default:
 		// Unknown dialog
 		break
@@ -3051,6 +3055,44 @@ func (m *UI) openQuitDialog() tea.Cmd {
 
 	quitDialog := dialog.NewQuit(m.com)
 	m.dialog.OpenDialog(quitDialog)
+	return nil
+}
+
+// openConfigAuditDialog opens the config audit dialog.
+func (m *UI) openConfigAuditDialog() tea.Cmd {
+	if m.dialog.ContainsDialog(dialog.ConfigAuditID) {
+		// Bring to front
+		m.dialog.BringToFront(dialog.ConfigAuditID)
+		return nil
+	}
+
+	// Find project config path
+	cfg := m.com.Config()
+	globalConfigPath := config.GlobalConfig()
+	var projectConfigPath string
+
+	if cfg != nil {
+		workingDir := cfg.WorkingDir()
+		// Look for project-level config
+		configNames := []string{"floyd.json", ".floyd.json"}
+		for _, name := range configNames {
+			path := filepath.Join(workingDir, name)
+			if _, err := os.Stat(path); err == nil {
+				projectConfigPath = path
+				break
+			}
+		}
+	}
+
+	// Run the audit
+	audit := dialog.RunConfigAudit(globalConfigPath, projectConfigPath, nil)
+
+	configAuditDialog, err := dialog.NewConfigAudit(m.com, audit)
+	if err != nil {
+		return util.ReportError(err)
+	}
+
+	m.dialog.OpenDialog(configAuditDialog)
 	return nil
 }
 
