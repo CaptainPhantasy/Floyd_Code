@@ -35,6 +35,7 @@ type Session struct {
 	MessageCount     int64
 	PromptTokens     int64
 	CompletionTokens int64
+	CacheReadTokens  int64
 	SummaryMessageID string
 	Cost             float64
 	Todos            []Todo
@@ -50,7 +51,7 @@ type Service interface {
 	Get(ctx context.Context, id string) (Session, error)
 	List(ctx context.Context) ([]Session, error)
 	Save(ctx context.Context, session Session) (Session, error)
-	UpdateTitleAndUsage(ctx context.Context, sessionID, title string, promptTokens, completionTokens int64, cost float64) error
+	UpdateTitleAndUsage(ctx context.Context, sessionID, title string, promptTokens, completionTokens, cacheReadTokens int64, cost float64) error
 	Delete(ctx context.Context, id string) error
 
 	// Agent tool session management
@@ -158,6 +159,7 @@ func (s *service) Save(ctx context.Context, session Session) (Session, error) {
 		Title:            session.Title,
 		PromptTokens:     session.PromptTokens,
 		CompletionTokens: session.CompletionTokens,
+		CacheReadTokens:  session.CacheReadTokens,
 		SummaryMessageID: sql.NullString{
 			String: session.SummaryMessageID,
 			Valid:  session.SummaryMessageID != "",
@@ -178,12 +180,13 @@ func (s *service) Save(ctx context.Context, session Session) (Session, error) {
 
 // UpdateTitleAndUsage updates only the title and usage fields atomically.
 // This is safer than fetching, modifying, and saving the entire session.
-func (s *service) UpdateTitleAndUsage(ctx context.Context, sessionID, title string, promptTokens, completionTokens int64, cost float64) error {
+func (s *service) UpdateTitleAndUsage(ctx context.Context, sessionID, title string, promptTokens, completionTokens, cacheReadTokens int64, cost float64) error {
 	return s.q.UpdateSessionTitleAndUsage(ctx, db.UpdateSessionTitleAndUsageParams{
 		ID:               sessionID,
 		Title:            title,
 		PromptTokens:     promptTokens,
 		CompletionTokens: completionTokens,
+		CacheReadTokens:  cacheReadTokens,
 		Cost:             cost,
 	})
 }
@@ -212,6 +215,7 @@ func (s service) fromDBItem(item db.Session) Session {
 		MessageCount:     item.MessageCount,
 		PromptTokens:     item.PromptTokens,
 		CompletionTokens: item.CompletionTokens,
+		CacheReadTokens:  item.CacheReadTokens,
 		SummaryMessageID: item.SummaryMessageID.String,
 		Cost:             item.Cost,
 		Todos:            todos,

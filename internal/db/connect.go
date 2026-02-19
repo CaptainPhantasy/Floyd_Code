@@ -72,6 +72,7 @@ func ensureColumns(ctx context.Context, db *sql.DB) error {
 		{"sessions", "cost", "ALTER TABLE sessions ADD COLUMN cost REAL NOT NULL DEFAULT 0.0"},
 		{"sessions", "summary_message_id", "ALTER TABLE sessions ADD COLUMN summary_message_id TEXT"},
 		{"sessions", "todos", "ALTER TABLE sessions ADD COLUMN todos TEXT"},
+		{"sessions", "cache_read_tokens", "ALTER TABLE sessions ADD COLUMN cache_read_tokens INTEGER NOT NULL DEFAULT 0"},
 	}
 
 	for _, c := range backfills {
