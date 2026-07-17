@@ -4,7 +4,6 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/legacy-ai/floyd/internal/agent"
 	"github.com/legacy-ai/floyd/internal/ui/common"
-	uv "github.com/charmbracelet/ultraviolet"
 )
 
 // selectedLargeModel returns the currently selected large language model from
@@ -31,7 +30,7 @@ func (m *UI) landingView() string {
 	parts = append(parts, "", m.modelInfo(width))
 	infoSection := lipgloss.JoinVertical(lipgloss.Left, parts...)
 
-	_, remainingHeightArea := uv.SplitVertical(m.layout.main, uv.Fixed(lipgloss.Height(infoSection)+1))
+	_, remainingHeightArea := splitVertical(m.layout.main, lipgloss.Height(infoSection)+1)
 
 	mcpLspSectionWidth := min(30, (width-1)/2)
 
