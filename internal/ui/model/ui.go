@@ -1259,6 +1259,17 @@ func (m *UI) handleDialogMsg(msg tea.Msg) tea.Cmd {
 			return nil
 		})
 		m.dialog.CloseDialog(dialog.CommandsID)
+	case dialog.ActionExportSession:
+		if m.isAgentBusy() {
+			cmds = append(cmds, util.ReportWarn("Agent is busy, please wait before exporting the session..."))
+			break
+		}
+		if msg.SessionID == "" {
+			cmds = append(cmds, util.ReportWarn("No active session to export. Start a conversation first."))
+			break
+		}
+		cmds = append(cmds, m.exportSession(msg.SessionID))
+		m.dialog.CloseDialog(dialog.CommandsID)
 	case dialog.ActionToggleHelp:
 		m.status.ToggleHelp()
 		m.dialog.CloseDialog(dialog.CommandsID)
@@ -3005,7 +3016,14 @@ func (m *UI) refreshCommandsThemeLabel() {
 
 func (m *UI) openCommandsDialog() tea.Cmd {
 	if m.dialog.ContainsDialog(dialog.CommandsID) {
-		// Bring to front
+		dia := m.dialog.Dialog(dialog.CommandsID)
+		if commands, ok := dia.(*dialog.Commands); ok {
+			sessionID := ""
+			if m.session != nil {
+				sessionID = m.session.ID
+			}
+			commands.SetSessionID(sessionID)
+		}
 		m.dialog.BringToFront(dialog.CommandsID)
 		return nil
 	}
