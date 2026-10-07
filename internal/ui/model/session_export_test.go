@@ -9,6 +9,7 @@ import (
 
 	"github.com/legacy-ai/floyd/internal/message"
 	"github.com/legacy-ai/floyd/internal/session"
+	"github.com/stretchr/testify/require"
 )
 
 func TestRenderSessionExportPreservesParts(t *testing.T) {
@@ -44,6 +45,22 @@ func TestRenderSessionExportPreservesParts(t *testing.T) {
 	}
 	if !strings.Contains(got, "````\ncontains ``` fence\n````") {
 		t.Error("tool output containing a Markdown fence was not safely enclosed")
+	}
+}
+
+func TestWriteSessionExportUsesResolvedDataDirectory(t *testing.T) {
+	t.Parallel()
+	for _, name := range []string{"custom-data", ".floyd"} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			dataDir := filepath.Join(t.TempDir(), name)
+			path, err := writeSessionExport(dataDir, "transcript", time.Now())
+			require.NoError(t, err)
+			require.Equal(t, filepath.Join(dataDir, "exports"), filepath.Dir(path))
+			content, err := os.ReadFile(path)
+			require.NoError(t, err)
+			require.Equal(t, "transcript", string(content))
+		})
 	}
 }
 

@@ -28,12 +28,9 @@ func (m *UI) exportSession(sessionID string) tea.Cmd {
 			return util.ReportError(fmt.Errorf("list session messages: %w", err))()
 		}
 
-		root := m.com.Config().WorkingDir()
-		if root == "" {
-			root = "."
-		}
+		dataDir := m.com.Config().Options.DataDirectory
 		exportedAt := time.Now()
-		path, err := writeSessionExport(root, renderSessionExport(sess, msgs, exportedAt), exportedAt)
+		path, err := writeSessionExport(dataDir, renderSessionExport(sess, msgs, exportedAt), exportedAt)
 		if err != nil {
 			return util.ReportError(err)()
 		}
@@ -41,8 +38,8 @@ func (m *UI) exportSession(sessionID string) tea.Cmd {
 	}
 }
 
-func writeSessionExport(root, content string, exportedAt time.Time) (string, error) {
-	exportsDir := filepath.Join(root, ".floyd", "exports")
+func writeSessionExport(dataDir, content string, exportedAt time.Time) (string, error) {
+	exportsDir := filepath.Join(dataDir, "exports")
 	if err := os.MkdirAll(exportsDir, 0o700); err != nil {
 		return "", fmt.Errorf("create export directory: %w", err)
 	}
