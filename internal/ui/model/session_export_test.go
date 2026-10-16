@@ -20,7 +20,11 @@ func TestRenderSessionExportPreservesParts(t *testing.T) {
 			message.ReasoningContent{Thinking: "inspect first"},
 			message.ToolCall{Name: "view", Input: "{\"path\":\"a.go\"}"},
 			message.ToolResult{Name: "view", Content: "contains ``` fence"},
-			message.Finish{Reason: message.FinishReasonEndTurn},
+			message.Finish{
+				Reason:  message.FinishReasonEndTurn,
+				Message: "Request failed",
+				Details: "The provider rejected the request",
+			},
 		}},
 	}
 
@@ -37,6 +41,8 @@ func TestRenderSessionExportPreservesParts(t *testing.T) {
 		"### Tool Result: view",
 		"contains ``` fence",
 		"*Finish reason: end_turn*",
+		"**Message**: Request failed",
+		"**Details**: The provider rejected the request",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("export missing %q", want)

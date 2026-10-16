@@ -148,6 +148,12 @@ func renderExportPart(out *strings.Builder, part message.ContentPart) {
 		if p.Reason != "" {
 			fmt.Fprintf(out, "*Finish reason: %s*\n\n", p.Reason)
 		}
+		if p.Message != "" {
+			fmt.Fprintf(out, "**Message**: %s\n\n", p.Message)
+		}
+		if p.Details != "" {
+			fmt.Fprintf(out, "**Details**: %s\n\n", p.Details)
+		}
 	}
 }
 
