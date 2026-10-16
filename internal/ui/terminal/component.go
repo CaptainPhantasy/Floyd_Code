@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"io"
+	"log/slog"
 	"sync"
 
 	tea "charm.land/bubbletea/v2"
@@ -31,6 +32,8 @@ type Component struct {
 	inputQueue chan []byte
 	done       chan struct{}
 	closeOnce  sync.Once
+
+	inputOverflowLogged bool
 }
 
 // New creates a terminal component. It spawns the shell and begins
@@ -75,7 +78,17 @@ func (c *Component) drainVTInput() {
 	for {
 		n, err := c.vt.Read(buf)
 		if n > 0 {
-			c.enqueueVTInput(buf[:n])
+			if !c.enqueueVTInput(buf[:n]) {
+				select {
+				case <-c.done:
+					return
+				default:
+				}
+				if !c.inputOverflowLogged {
+					c.inputOverflowLogged = true
+					go slog.Warn("Embedded terminal input queue is full; dropping terminal input")
+				}
+			}
 		}
 		if err != nil {
 			return

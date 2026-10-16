@@ -725,6 +725,9 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		// When terminal is focused, forward almost all keys to it.
 		if m.focus == uiFocusTerminal && m.term != nil {
+			if m.dialog.HasDialogs() {
+				return m, m.handleDialogMsg(msg)
+			}
 			if key.Matches(msg, m.keyMap.Quit) && !m.dialog.ContainsDialog(dialog.QuitID) {
 				if cmd := m.openQuitDialog(); cmd != nil {
 					cmds = append(cmds, cmd)
