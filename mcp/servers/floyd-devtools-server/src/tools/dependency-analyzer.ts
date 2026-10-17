@@ -86,9 +86,9 @@ function extractTSImports(content: string, filePath: string): string[] {
     const trimmed = line.trim();
 
     // ES6 imports: import ... from "module"
-    const importMatch = trimmed.match(/import\s+(?:(?:\{[^}]*\}|\*\s+as\s+\w+|\w+)\s*,?\s*)*\s*from\s*['""]([^'""]+)['""];?/);
+    const importMatch = trimmed.match(/^import\b[^'"]*\sfrom\s+(['"])([^'"]+)\1;?\s*$/);
     if (importMatch) {
-      imports.push(importMatch[1]);
+      imports.push(importMatch[2]);
       continue;
     }
 
