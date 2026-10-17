@@ -727,8 +727,8 @@ func (m *UI) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.focus == uiFocusTerminal && m.term != nil {
 			if key.Matches(msg, m.keyMap.Quit) && !m.dialog.ContainsDialog(dialog.QuitID) {
 				if cmd := m.openQuitDialog(); cmd != nil {
-						cmds = append(cmds, cmd)
-					}
+					cmds = append(cmds, cmd)
+				}
 				return m, tea.Batch(cmds...)
 			}
 			// Ctrl+T exits terminal focus, Ctrl+C quits the app.
@@ -2321,7 +2321,7 @@ func (m *UI) generateLayout(w, h int) layout {
 	}
 
 	// Add app margins
-	appRect, helpRect := uv.SplitVertical(area, uv.Fixed(area.Dy()-helpHeight))
+	appRect, helpRect := splitVertical(area, area.Dy()-helpHeight)
 	appRect.Min.Y += 1
 	appRect.Max.Y -= 1
 	helpRect.Min.Y -= 1
@@ -2350,7 +2350,7 @@ func (m *UI) generateLayout(w, h int) layout {
 		// ------
 		// help
 
-		headerRect, mainRect := uv.SplitVertical(appRect, uv.Fixed(landingHeaderHeight))
+		headerRect, mainRect := splitVertical(appRect, landingHeaderHeight)
 		layout.header = headerRect
 		layout.main = mainRect
 
@@ -2364,8 +2364,8 @@ func (m *UI) generateLayout(w, h int) layout {
 		// editor
 		// ------
 		// help
-		headerRect, mainRect := uv.SplitVertical(appRect, uv.Fixed(landingHeaderHeight))
-		mainRect, editorRect := uv.SplitVertical(mainRect, uv.Fixed(mainRect.Dy()-editorHeight))
+		headerRect, mainRect := splitVertical(appRect, landingHeaderHeight)
+		mainRect, editorRect := splitVertical(mainRect, mainRect.Dy()-editorHeight)
 		// Remove extra padding from editor (but keep it for header and main)
 		editorRect.Min.X -= 1
 		editorRect.Max.X += 1
@@ -2393,9 +2393,9 @@ func (m *UI) generateLayout(w, h int) layout {
 			// ------
 			// help
 			const compactHeaderHeight = 1
-			headerRect, mainRect := uv.SplitVertical(appRect, uv.Fixed(compactHeaderHeight))
+			headerRect, mainRect := splitVertical(appRect, compactHeaderHeight)
 			detailsHeight := min(sessionDetailsMaxHeight, area.Dy()-1) // One row for the header
-			sessionDetailsArea, _ := uv.SplitVertical(appRect, uv.Fixed(detailsHeight))
+			sessionDetailsArea, _ := splitVertical(appRect, detailsHeight)
 			layout.sessionDetails = sessionDetailsArea
 			layout.sessionDetails.Min.Y += compactHeaderHeight // adjust for header
 			// Add one line gap between header and main content
@@ -2403,15 +2403,15 @@ func (m *UI) generateLayout(w, h int) layout {
 
 			// Split off terminal area if open.
 			if termHeight > 0 {
-				mainRect, termRect := uv.SplitVertical(mainRect, uv.Fixed(mainRect.Dy()-termHeight-editorHeight))
-				termRect, editorRect := uv.SplitVertical(termRect, uv.Fixed(termHeight))
+				mainRect, termRect := splitVertical(mainRect, mainRect.Dy()-termHeight-editorHeight)
+				termRect, editorRect := splitVertical(termRect, termHeight)
 				layout.terminal = termRect
 				mainRect.Max.X -= 1 // Add padding right
 				layout.header = headerRect
 				pillsHeight := m.pillsAreaHeight()
 				if pillsHeight > 0 {
 					pillsHeight = min(pillsHeight, mainRect.Dy())
-					chatRect, pillsRect := uv.SplitVertical(mainRect, uv.Fixed(mainRect.Dy()-pillsHeight))
+					chatRect, pillsRect := splitVertical(mainRect, mainRect.Dy()-pillsHeight)
 					layout.main = chatRect
 					layout.pills = pillsRect
 				} else {
@@ -2420,13 +2420,13 @@ func (m *UI) generateLayout(w, h int) layout {
 				layout.main.Max.Y -= 1
 				layout.editor = editorRect
 			} else {
-				mainRect, editorRect := uv.SplitVertical(mainRect, uv.Fixed(mainRect.Dy()-editorHeight))
+				mainRect, editorRect := splitVertical(mainRect, mainRect.Dy()-editorHeight)
 				mainRect.Max.X -= 1 // Add padding right
 				layout.header = headerRect
 				pillsHeight := m.pillsAreaHeight()
 				if pillsHeight > 0 {
 					pillsHeight = min(pillsHeight, mainRect.Dy())
-					chatRect, pillsRect := uv.SplitVertical(mainRect, uv.Fixed(mainRect.Dy()-pillsHeight))
+					chatRect, pillsRect := splitVertical(mainRect, mainRect.Dy()-pillsHeight)
 					layout.main = chatRect
 					layout.pills = pillsRect
 				} else {
@@ -2447,20 +2447,20 @@ func (m *UI) generateLayout(w, h int) layout {
 			// ----------
 			// help
 
-			mainRect, sideRect := uv.SplitHorizontal(appRect, uv.Fixed(appRect.Dx()-sidebarWidth))
+			mainRect, sideRect := splitHorizontal(appRect, appRect.Dx()-sidebarWidth)
 			// Add padding left
 			sideRect.Min.X += 1
 			layout.sidebar = sideRect
 
 			if termHeight > 0 {
-				mainRect, termRect := uv.SplitVertical(mainRect, uv.Fixed(mainRect.Dy()-termHeight-editorHeight))
-				termRect, editorRect := uv.SplitVertical(termRect, uv.Fixed(termHeight))
+				mainRect, termRect := splitVertical(mainRect, mainRect.Dy()-termHeight-editorHeight)
+				termRect, editorRect := splitVertical(termRect, termHeight)
 				layout.terminal = termRect
 				mainRect.Max.X -= 1 // Add padding right
 				pillsHeight := m.pillsAreaHeight()
 				if pillsHeight > 0 {
 					pillsHeight = min(pillsHeight, mainRect.Dy())
-					chatRect, pillsRect := uv.SplitVertical(mainRect, uv.Fixed(mainRect.Dy()-pillsHeight))
+					chatRect, pillsRect := splitVertical(mainRect, mainRect.Dy()-pillsHeight)
 					layout.main = chatRect
 					layout.pills = pillsRect
 				} else {
@@ -2469,12 +2469,12 @@ func (m *UI) generateLayout(w, h int) layout {
 				layout.main.Max.Y -= 1
 				layout.editor = editorRect
 			} else {
-				mainRect, editorRect := uv.SplitVertical(mainRect, uv.Fixed(mainRect.Dy()-editorHeight))
+				mainRect, editorRect := splitVertical(mainRect, mainRect.Dy()-editorHeight)
 				mainRect.Max.X -= 1 // Add padding right
 				pillsHeight := m.pillsAreaHeight()
 				if pillsHeight > 0 {
 					pillsHeight = min(pillsHeight, mainRect.Dy())
-					chatRect, pillsRect := uv.SplitVertical(mainRect, uv.Fixed(mainRect.Dy()-pillsHeight))
+					chatRect, pillsRect := splitVertical(mainRect, mainRect.Dy()-pillsHeight)
 					layout.main = chatRect
 					layout.pills = pillsRect
 				} else {

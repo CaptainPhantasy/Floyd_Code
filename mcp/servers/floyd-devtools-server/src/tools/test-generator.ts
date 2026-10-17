@@ -241,7 +241,7 @@ function extractPythonFunctions(code: string): FunctionSignature[] {
       // Parse Python params
       const params = paramsStr.split(",").filter(p => p.trim() && p.trim() !== "self").map(p => {
         const parts = p.trim().split(":").map(x => x.trim());
-        const name = parts[0].replace("*", "").replace("**", "");
+        const name = parts[0].replaceAll("*", "");
         const type = parts[1]?.split("=")[0]?.trim() || "Any";
         const hasDefault = p.includes("=");
 

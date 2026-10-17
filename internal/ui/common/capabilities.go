@@ -47,7 +47,7 @@ func (c *Capabilities) Update(msg any) {
 	case tea.WindowSizeMsg:
 		c.Columns = m.Width
 		c.Rows = m.Height
-	case uv.WindowPixelSizeEvent:
+	case uv.PixelSizeEvent:
 		c.PixelX = m.Width
 		c.PixelY = m.Height
 	case uv.KittyGraphicsEvent:

@@ -144,7 +144,7 @@ func (m *UI) drawSidebar(scr uv.Screen, area uv.Rectangle) {
 		blocks...,
 	)
 
-	_, remainingHeightArea := uv.SplitVertical(m.layout.sidebar, uv.Fixed(lipgloss.Height(sidebarHeader)))
+	_, remainingHeightArea := splitVertical(m.layout.sidebar, lipgloss.Height(sidebarHeader))
 	remainingHeight := remainingHeightArea.Dy() - 10
 	maxFiles, maxLSPs, maxMCPs := getDynamicHeightLimits(remainingHeight)
 
