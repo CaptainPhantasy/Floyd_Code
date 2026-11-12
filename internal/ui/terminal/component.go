@@ -2,11 +2,15 @@ package terminal
 
 import (
 	"io"
+	"log/slog"
+	"sync"
 
 	tea "charm.land/bubbletea/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/vt"
 )
+
+const vtInputQueueSize = 64
 
 // OutputMsg carries a chunk of PTY output into the bubbletea event
 // loop so we can feed it to the VT emulator on the main goroutine.
@@ -24,6 +28,12 @@ type Component struct {
 	focused bool
 	width   int
 	height  int
+
+	inputQueue chan []byte
+	done       chan struct{}
+	closeOnce  sync.Once
+
+	inputOverflowLogged bool
 }
 
 // New creates a terminal component. It spawns the shell and begins
@@ -37,16 +47,88 @@ func New(rows, cols int, cwd string) (*Component, tea.Cmd, error) {
 	emu := vt.NewSafeEmulator(cols, rows)
 
 	c := &Component{
-		session: sess,
-		vt:      emu,
-		width:   cols,
-		height:  rows,
+		session:    sess,
+		vt:         emu,
+		width:      cols,
+		height:     rows,
+		inputQueue: make(chan []byte, vtInputQueueSize),
+		done:       make(chan struct{}),
 	}
+
+	// Start a persistent goroutine that drains the VT emulator's
+	// internal pipe (pr) → PTY. The VT emulator writes responses
+	// (device attributes, cursor reports, focus events, etc.) to an
+	// io.Pipe. If nobody reads the pipe, any pw.Write() blocks and
+	// deadlocks the caller — which is often the main Bubble Tea
+	// goroutine via Emulator.Write(). This goroutine prevents that.
+	go c.drainVTInput()
+	go c.writeVTInput()
 
 	// Kick off the reader goroutine that bridges PTY → bubbletea.
 	cmd := c.readLoop()
 
 	return c, cmd, nil
+}
+
+// drainVTInput continuously reads from the VT emulator's output pipe
+// and forwards the data to the PTY session. This runs for the
+// lifetime of the component and exits when the emulator is closed.
+func (c *Component) drainVTInput() {
+	buf := make([]byte, 4096)
+	for {
+		n, err := c.vt.Read(buf)
+		if n > 0 {
+			if !c.enqueueVTInput(buf[:n]) {
+				select {
+				case <-c.done:
+					return
+				default:
+				}
+				if !c.inputOverflowLogged {
+					c.inputOverflowLogged = true
+					go slog.Warn("Embedded terminal input queue is full; dropping terminal input")
+				}
+			}
+		}
+		if err != nil {
+			return
+		}
+	}
+}
+
+// enqueueVTInput copies bytes into the bounded writer queue without
+// blocking. Input is dropped if the queue is full or the component is
+// shutting down.
+func (c *Component) enqueueVTInput(data []byte) bool {
+	select {
+	case <-c.done:
+		return false
+	default:
+	}
+
+	input := append([]byte(nil), data...)
+	select {
+	case <-c.done:
+		return false
+	case c.inputQueue <- input:
+		return true
+	default:
+		return false
+	}
+}
+
+// writeVTInput serially forwards queued terminal input to the PTY.
+func (c *Component) writeVTInput() {
+	for {
+		select {
+		case <-c.done:
+			return
+		case input := <-c.inputQueue:
+			if _, err := c.session.Write(input); err != nil {
+				return
+			}
+		}
+	}
 }
 
 // readLoop returns a tea.Cmd that reads the next chunk from the PTY
@@ -102,18 +184,17 @@ func (c *Component) Update(msg tea.Msg) (bool, tea.Cmd) {
 			return false, nil
 		}
 		// Forward key events to the VT emulator, which converts them
-		// into the correct escape sequences.
+		// into the correct escape sequences. The drainVTInput goroutine
+		// handles forwarding the translated sequences to the PTY.
 		c.vt.SendKey(teaKeyToUV(msg))
-		// Flush VT input to the PTY in a background goroutine to
-		// avoid blocking the UI thread if the PTY buffer is full.
-		return true, c.flushVTInputCmd()
+		return true, nil
 
 	case tea.PasteMsg:
 		if !c.focused {
 			return false, nil
 		}
 		c.vt.Paste(msg.Content)
-		return true, c.flushVTInputCmd()
+		return true, nil
 
 	case tea.WindowSizeMsg:
 		if c.focused {
@@ -123,26 +204,6 @@ func (c *Component) Update(msg tea.Msg) (bool, tea.Cmd) {
 	}
 
 	return false, nil
-}
-
-// flushVTInputCmd returns a tea.Cmd that reads pending input from the
-// VT emulator and writes it to the PTY in a background goroutine.
-// This prevents the main UI thread from blocking when the PTY buffer
-// is full.
-func (c *Component) flushVTInputCmd() tea.Cmd {
-	return func() tea.Msg {
-		buf := make([]byte, 4096)
-		for {
-			n, err := c.vt.Read(buf)
-			if n > 0 {
-				c.session.Write(buf[:n]) //nolint:errcheck
-			}
-			if n == 0 || err != nil {
-				break
-			}
-		}
-		return nil
-	}
 }
 
 // Resize changes both the VT emulator and the PTY window size.
@@ -180,12 +241,15 @@ func (c *Component) Focused() bool {
 
 // Close tears down the PTY session and VT emulator.
 func (c *Component) Close() {
-	if c.session != nil {
-		c.session.Close() //nolint:errcheck
-	}
-	if c.vt != nil {
-		c.vt.Close() //nolint:errcheck
-	}
+	c.closeOnce.Do(func() {
+		close(c.done)
+		if c.session != nil {
+			c.session.Close() //nolint:errcheck
+		}
+		if c.vt != nil {
+			c.vt.Close() //nolint:errcheck
+		}
+	})
 }
 
 // Active reports whether the terminal session is still running.
